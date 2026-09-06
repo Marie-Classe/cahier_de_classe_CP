@@ -1084,11 +1084,18 @@ async function renderJournal(dateStr){
   // évite d'afficher un vieux jour si l'utilisateur a déjà changé de date pendant le chargement
   if (document.getElementById('journalDate').value !== dateStr) return;
 
+  const usedAgendaEvents = new Set();
+
   slots.forEach((slot, idx) => {
     const slotStartMin = parseHeureToMinutes(slot.heure);
     const nextSlot = slots[idx + 1];
     const slotEndMin = nextSlot ? parseHeureToMinutes(nextSlot.heure) : (slotStartMin != null ? slotStartMin + 60 : null);
-    const agendaEvent = agendaEvents.length ? findAgendaEventForSlot(agendaEvents, slotStartMin, slotEndMin) : null;
+    let agendaEvent = agendaEvents.length ? findAgendaEventForSlot(agendaEvents, slotStartMin, slotEndMin) : null;
+
+    // Un même événement peut chevaucher plusieurs créneaux consécutifs de l'emploi du
+    // temps (ex. un cours de 30 min qui couvre 2 lignes) : on ne l'affiche qu'une fois.
+    if (agendaEvent && usedAgendaEvents.has(agendaEvent)) return;
+    if (agendaEvent) usedAgendaEvents.add(agendaEvent);
 
     const card = document.createElement('div');
     card.className = 'subject-card';
