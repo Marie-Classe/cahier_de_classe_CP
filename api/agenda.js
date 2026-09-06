@@ -11,6 +11,22 @@
 
 const ical = require('node-ical');
 
+// Convertit une Date JS en heure/minute et en date (YYYY-MM-DD) exprimées dans le
+// fuseau Europe/Paris, quel que soit le fuseau du serveur (Vercel tourne en UTC).
+function toParisParts(date){
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(date);
+  const get = t => parts.find(p => p.type === t).value;
+  return {
+    dateStr: `${get('year')}-${get('month')}-${get('day')}`,
+    hour: parseInt(get('hour'), 10) % 24, // Intl peut renvoyer "24" pour minuit
+    minute: parseInt(get('minute'), 10)
+  };
+}
+
 module.exports = async (req, res) => {
   // Autorise l'app (n'importe quelle origine) à appeler cette fonction
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -40,8 +56,12 @@ module.exports = async (req, res) => {
       const occurrences = [];
       if (item.rrule) {
         try {
-          const windowStart = new Date(date + 'T00:00:00');
-          const windowEnd = new Date(date + 'T23:59:59');
+          // Fenêtre volontairement large (fuseau serveur ≠ Europe/Paris) ; le filtre
+          // exact sur le jour se fait ensuite via toParisParts().dateStr === date
+          const windowStart = new Date(date + 'T00:00:00Z');
+          windowStart.setUTCDate(windowStart.getUTCDate() - 1);
+          const windowEnd = new Date(date + 'T23:59:59Z');
+          windowEnd.setUTCDate(windowEnd.getUTCDate() + 1);
           const dates = item.rrule.between(windowStart, windowEnd, true);
           dates.forEach(d => occurrences.push(d));
         } catch (e) { /* règle de récurrence non gérée, on ignore */ }
@@ -50,17 +70,18 @@ module.exports = async (req, res) => {
       }
 
       occurrences.forEach(startDate => {
-        const startStr = startDate.toISOString().slice(0, 10);
-        if (startStr !== date) return;
+        const startP = toParisParts(startDate);
+        if (startP.dateStr !== date) return;
         const durationMs = (new Date(item.end) - new Date(item.start)) || 30 * 60 * 1000;
         const endDate = new Date(startDate.getTime() + durationMs);
+        const endP = toParisParts(endDate);
         events.push({
           title: item.summary || '',
           description: item.description || '',
-          start: `${startDate.getHours()}h${pad(startDate.getMinutes())}`,
-          end: `${endDate.getHours()}h${pad(endDate.getMinutes())}`,
-          startMinutes: startDate.getHours() * 60 + startDate.getMinutes(),
-          endMinutes: endDate.getHours() * 60 + endDate.getMinutes()
+          start: `${startP.hour}h${pad(startP.minute)}`,
+          end: `${endP.hour}h${pad(endP.minute)}`,
+          startMinutes: startP.hour * 60 + startP.minute,
+          endMinutes: endP.hour * 60 + endP.minute
         });
       });
     });
