@@ -99,12 +99,15 @@
   @media (min-width: 860px){
     main{ max-width: 1400px; }
     #journalContent{
-      display:grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 12px;
-      align-items: start;
+      column-width: 300px;
+      column-gap: 12px;
     }
-    #journalContent .subject-card{ margin-bottom: 0; }
+    #journalContent .subject-card{
+      break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      display: inline-block;
+      width: 100%;
+    }
     .analyse-card{ max-width: 700px; }
   }
   .panel{ display:none; }
@@ -538,6 +541,57 @@
     background: #FFFEFB;
   }
 
+  .note-wrap{ margin-top: 4px; }
+  .note-toggle-btn{
+    border: 1px solid var(--line);
+    background: white;
+    color: var(--ink-soft);
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .note-toggle-btn.has-note{
+    background: #FFF3DE;
+    border-color: var(--gold);
+    color: var(--ink);
+  }
+  .note-textarea{ margin-top: 6px; }
+
+  .edt-week-grid{
+    display: none;
+  }
+  @media (min-width: 860px){
+    .edt-mobile-only{ display:none; }
+    .edt-week-grid{
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .edt-day-col h3{
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .edt-day-col .edt-day-actions{
+      display:flex;
+      gap: 6px;
+    }
+    .edt-day-col .edt-day-actions button{
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      padding: 3px 6px;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+  }
+
   .obs-grid{
     display:grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -739,7 +793,7 @@
 
   <!-- EMPLOI DU TEMPS -->
   <section id="edt" class="panel">
-    <div class="datebar">
+    <div class="datebar edt-mobile-only">
       <select id="edtWeekday" class="suivi-select">
         <option value="lundi">Lundi</option>
         <option value="mardi">Mardi</option>
@@ -748,12 +802,13 @@
       </select>
     </div>
     <p class="empty-note" style="margin-bottom:14px;">Les modifications s'appliquent tout de suite au Cahier journal et aux Devoirs. Le bouton "Copier" colle à partir de la colonne "Heure" (B) du bloc du jour dans la feuille "Emploi du temps".</p>
-    <div id="edtContent"></div>
-    <div class="actions" style="flex-wrap:wrap; row-gap:8px;">
+    <div id="edtContent" class="edt-mobile-only"></div>
+    <div class="actions edt-mobile-only" style="flex-wrap:wrap; row-gap:8px;">
       <button class="primary" id="addEdtSlot">+ Ajouter un créneau</button>
       <button class="primary" id="copyEdt">Copier pour coller dans le Google Sheet</button>
       <button id="resetEdt" style="font-family:-apple-system,sans-serif;font-size:0.82rem;background:white;color:var(--mission);border:1px solid var(--mission);border-radius:10px;padding:10px 14px;cursor:pointer;">Réinitialiser ce jour</button>
     </div>
+    <div id="edtWeekGrid" class="edt-week-grid"></div>
   </section>
 
   <!-- DEVOIRS -->
@@ -1069,7 +1124,9 @@ function findAgendaEventForSlot(events, slotStartMin, slotEndMin){
   return events.find(e => e.startMinutes < slotEndMin && e.endMinutes > slotStartMin) || null;
 }
 
+let journalRenderSeq = 0;
 async function renderJournal(dateStr){
+  const mySeq = ++journalRenderSeq;
   document.getElementById('journalDate').value = dateStr;
   document.getElementById('dayLabel').textContent = dayLabelFr(dateStr);
   const container = document.getElementById('journalContent');
@@ -1092,8 +1149,9 @@ async function renderJournal(dateStr){
   }
 
   const agendaEvents = await fetchAgendaEvents(dateStr);
-  // évite d'afficher un vieux jour si l'utilisateur a déjà changé de date pendant le chargement
-  if (document.getElementById('journalDate').value !== dateStr) return;
+  // évite d'afficher un résultat périmé si un rendu plus récent a été déclenché entre-temps
+  if (mySeq !== journalRenderSeq) return;
+  container.innerHTML = '';
 
   const usedAgendaEvents = new Set();
 
@@ -1219,14 +1277,13 @@ async function renderJournal(dateStr){
         }
         body.appendChild(modLine);
       }
-      const ta = document.createElement('textarea');
-      ta.className = 'free';
-      ta.placeholder = `Notes libres — ${slot.matiere || slot.modalite || ''}`;
-      ta.dataset.slotIdx = idx;
       const savedNote = loadJournalNotes()[journalNoteKey(dateStr, idx)];
-      ta.value = savedNote !== undefined ? savedNote : (slot.competence || '');
-      ta.addEventListener('input', () => saveJournalNote(dateStr, idx, ta.value));
-      body.appendChild(ta);
+      const initialNote = savedNote !== undefined ? savedNote : (slot.competence || '');
+      const noteToggle = buildNoteToggle(initialNote, `Notes libres — ${slot.matiere || slot.modalite || ''}`, (val) => {
+        saveJournalNote(dateStr, idx, val);
+      });
+      noteToggle._textarea.dataset.slotIdx = idx;
+      body.appendChild(noteToggle);
     }
 
     card.appendChild(body);
@@ -1899,12 +1956,100 @@ function buildSelectWithAutre(options, currentValue, extraClass, placeholder, on
   return wrap;
 }
 
+// Construit une icône ✎ qui affiche/masque une zone de texte au clic, plutôt que
+// d'occuper de la place en permanence. Retourne le wrapper (bouton + textarea).
+function buildNoteToggle(initialValue, placeholder, onSave, extraTaClass){
+  const wrap = document.createElement('div');
+  wrap.className = 'note-wrap';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'note-toggle-btn' + (initialValue && initialValue.trim() ? ' has-note' : '');
+  btn.innerHTML = '✎';
+  btn.title = 'Ajouter / modifier une note';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'free note-textarea' + (extraTaClass ? ' ' + extraTaClass : '');
+  ta.placeholder = placeholder || '';
+  ta.value = initialValue || '';
+  ta.style.display = 'none';
+
+  btn.addEventListener('click', () => {
+    const show = ta.style.display === 'none';
+    ta.style.display = show ? 'block' : 'none';
+    if (show) ta.focus();
+  });
+  ta.addEventListener('input', () => {
+    btn.classList.toggle('has-note', !!ta.value.trim());
+    onSave(ta.value);
+  });
+
+  wrap.appendChild(btn);
+  wrap.appendChild(ta);
+  wrap.querySelector('textarea');
+  wrap._textarea = ta;
+  return wrap;
+}
+
 function updateSlotField(wd, idx, field, value){
   const override = loadEdtOverride();
   const current = override[wd] || cloneSlots(getEffectiveSlots(wd));
   current[idx] = Object.assign({}, current[idx], { [field]: value });
   override[wd] = current;
   saveEdtOverride(override);
+}
+
+// Construit une carte de créneau éditable pour un jour donné. Réutilisée par la vue
+// mobile (un jour) et la vue semaine complète (desktop).
+function buildEdtCard(wd, slot, idx, matiereOptions, modaliteOptions, onDelete){
+  const card = document.createElement('div');
+  card.className = 'edt-card';
+
+  const row1 = document.createElement('div');
+  row1.className = 'edt-row';
+
+  const heureInput = document.createElement('input');
+  heureInput.type = 'text';
+  heureInput.className = 'edt-input edt-heure';
+  heureInput.placeholder = 'Heure';
+  heureInput.value = slot.heure || '';
+  heureInput.addEventListener('input', () => updateSlotField(wd, idx, 'heure', heureInput.value));
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'edt-del';
+  delBtn.textContent = '✕';
+  delBtn.addEventListener('click', () => {
+    const override = loadEdtOverride();
+    const current = override[wd] || cloneSlots(getEffectiveSlots(wd));
+    current.splice(idx, 1);
+    override[wd] = current;
+    saveEdtOverride(override);
+    onDelete();
+  });
+
+  const matiereWrap = buildSelectWithAutre(matiereOptions, slot.matiere, 'edt-matiere', 'Matière', (val) => {
+    updateSlotField(wd, idx, 'matiere', val);
+  });
+
+  row1.appendChild(heureInput);
+  row1.appendChild(matiereWrap);
+  row1.appendChild(delBtn);
+  card.appendChild(row1);
+
+  const row2 = document.createElement('div');
+  row2.className = 'edt-row';
+  const modaliteWrap = buildSelectWithAutre(modaliteOptions, slot.modalite, 'edt-modalite', 'Modalité', (val) => {
+    updateSlotField(wd, idx, 'modalite', val);
+  });
+  row2.appendChild(modaliteWrap);
+  card.appendChild(row2);
+
+  const noteToggle = buildNoteToggle(slot.competence, 'Compétence / description (optionnel)', (val) => {
+    updateSlotField(wd, idx, 'competence', val || null);
+  }, 'edt-comp');
+  card.appendChild(noteToggle);
+
+  return card;
 }
 
 function renderEdt(){
@@ -1924,58 +2069,80 @@ function renderEdt(){
   const modaliteOptions = getAllModalites();
 
   slots.forEach((slot, idx) => {
-    const card = document.createElement('div');
-    card.className = 'edt-card';
+    container.appendChild(buildEdtCard(wd, slot, idx, matiereOptions, modaliteOptions, renderEdtAll));
+  });
+}
 
-    const row1 = document.createElement('div');
-    row1.className = 'edt-row';
+const EDT_WEEKDAYS = ['lundi', 'mardi', 'jeudi', 'vendredi'];
+const EDT_WEEKDAY_LABELS = { lundi: 'Lundi', mardi: 'Mardi', jeudi: 'Jeudi', vendredi: 'Vendredi' };
 
-    const heureInput = document.createElement('input');
-    heureInput.type = 'text';
-    heureInput.className = 'edt-input edt-heure';
-    heureInput.placeholder = 'Heure';
-    heureInput.value = slot.heure || '';
-    heureInput.addEventListener('input', () => updateSlotField(wd, idx, 'heure', heureInput.value));
+function renderEdtWeek(){
+  const grid = document.getElementById('edtWeekGrid');
+  grid.innerHTML = '';
+  const matiereOptions = getAllMatieres();
+  const modaliteOptions = getAllModalites();
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'edt-del';
-    delBtn.textContent = '✕';
+  EDT_WEEKDAYS.forEach(wd => {
+    const col = document.createElement('div');
+    col.className = 'edt-day-col';
 
-    const matiereWrap = buildSelectWithAutre(matiereOptions, slot.matiere, 'edt-matiere', 'Matière', (val) => {
-      updateSlotField(wd, idx, 'matiere', val);
-    });
+    const h3 = document.createElement('h3');
+    const label = document.createElement('span');
+    label.textContent = EDT_WEEKDAY_LABELS[wd];
+    h3.appendChild(label);
 
-    row1.appendChild(heureInput);
-    row1.appendChild(matiereWrap);
-    row1.appendChild(delBtn);
-    card.appendChild(row1);
+    const dayActions = document.createElement('div');
+    dayActions.className = 'edt-day-actions';
 
-    const row2 = document.createElement('div');
-    row2.className = 'edt-row';
-    const modaliteWrap = buildSelectWithAutre(modaliteOptions, slot.modalite, 'edt-modalite', 'Modalité', (val) => {
-      updateSlotField(wd, idx, 'modalite', val);
-    });
-    row2.appendChild(modaliteWrap);
-    card.appendChild(row2);
-
-    const compInput = document.createElement('textarea');
-    compInput.className = 'edt-comp';
-    compInput.placeholder = 'Compétence / description (optionnel)';
-    compInput.value = slot.competence || '';
-    compInput.addEventListener('input', () => updateSlotField(wd, idx, 'competence', compInput.value || null));
-    card.appendChild(compInput);
-
-    delBtn.addEventListener('click', () => {
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ créneau';
+    addBtn.addEventListener('click', () => {
       const override = loadEdtOverride();
       const current = override[wd] || cloneSlots(getEffectiveSlots(wd));
-      current.splice(idx, 1);
+      current.push({ heure: '', matiere: '', modalite: '', competence: null });
       override[wd] = current;
       saveEdtOverride(override);
-      renderEdt();
+      renderEdtAll();
     });
 
-    container.appendChild(card);
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copier';
+    copyBtn.addEventListener('click', () => copyEdtDayToClipboard(wd));
+
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'Réinit.';
+    resetBtn.addEventListener('click', () => {
+      const override = loadEdtOverride();
+      delete override[wd];
+      saveEdtOverride(override);
+      renderEdtAll();
+      showToast(`${EDT_WEEKDAY_LABELS[wd]} réinitialisé`);
+    });
+
+    dayActions.appendChild(addBtn);
+    dayActions.appendChild(copyBtn);
+    dayActions.appendChild(resetBtn);
+    h3.appendChild(dayActions);
+    col.appendChild(h3);
+
+    const slots = getEffectiveSlots(wd) || [];
+    if (slots.length === 0){
+      const note = document.createElement('div');
+      note.className = 'empty-note';
+      note.textContent = "Aucun créneau.";
+      col.appendChild(note);
+    }
+    slots.forEach((slot, idx) => {
+      col.appendChild(buildEdtCard(wd, slot, idx, matiereOptions, modaliteOptions, renderEdtAll));
+    });
+
+    grid.appendChild(col);
   });
+}
+
+function renderEdtAll(){
+  renderEdt();
+  renderEdtWeek();
 }
 
 function addEdtSlot(){
@@ -1985,7 +2152,7 @@ function addEdtSlot(){
   current.push({ heure: '', matiere: '', modalite: '', competence: null });
   override[wd] = current;
   saveEdtOverride(override);
-  renderEdt();
+  renderEdtAll();
 }
 
 function resetEdtDay(){
@@ -1993,16 +2160,20 @@ function resetEdtDay(){
   const override = loadEdtOverride();
   delete override[wd];
   saveEdtOverride(override);
-  renderEdt();
+  renderEdtAll();
   showToast('Jour réinitialisé à partir des données d\'origine');
 }
 
-function copyEdtToClipboard(){
-  const wd = document.getElementById('edtWeekday').value;
+function copyEdtDayToClipboard(wd){
   const slots = getEffectiveSlots(wd) || [];
   if (slots.length === 0){ showToast('Rien à copier pour ce jour'); return; }
   const lines = slots.map(s => [s.heure || '', s.matiere || '', s.modalite || '', s.competence || ''].join('\t'));
   safeCopyText(lines.join('\n'), `Copié — colle à partir de la colonne "Heure" du bloc ${wd} dans "Emploi du temps"`);
+}
+
+function copyEdtToClipboard(){
+  const wd = document.getElementById('edtWeekday').value;
+  copyEdtDayToClipboard(wd);
 }
 
 // ---------- APC ----------
@@ -2085,7 +2256,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'suivi') renderSuivi();
     if (btn.dataset.tab === 'observations') renderObservations();
     if (btn.dataset.tab === 'apc') renderApc();
-    if (btn.dataset.tab === 'edt') renderEdt();
+    if (btn.dataset.tab === 'edt') renderEdtAll();
     if (btn.dataset.tab === 'comportement') renderComportJour(document.getElementById('comportDate').value);
   });
 });
@@ -2321,7 +2492,7 @@ function switchComportSubtab(sub){
 
   renderApc();
 
-  renderEdt();
+  renderEdtAll();
   document.getElementById('edtWeekday').addEventListener('change', renderEdt);
   document.getElementById('addEdtSlot').addEventListener('click', addEdtSlot);
   document.getElementById('copyEdt').addEventListener('click', copyEdtToClipboard);
