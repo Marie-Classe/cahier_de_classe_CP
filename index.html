@@ -164,8 +164,9 @@
     display:flex;
     gap:10px;
     align-items:flex-start;
-    padding: 8px 0;
+    padding: 6px 0;
     border-bottom: 1px dashed var(--line);
+    flex-wrap: wrap;
   }
   .entry:last-child{ border-bottom:none; }
   .dot{
@@ -173,8 +174,8 @@
     margin-top: 5px;
     flex-shrink:0;
   }
-  .entry-text{ flex:1; }
-  .entry-title{ font-size: 0.98rem; }
+  .entry-text{ flex:1; min-width: 120px; }
+  .entry-title{ font-size: 0.92rem; }
   .entry-meta{
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.75rem;
@@ -183,6 +184,14 @@
   }
   .entry-meta a{ color: var(--son); text-decoration:none; }
   .entry-meta a:hover{ text-decoration:underline; }
+  .badge-row{
+    display:flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    align-items:center;
+    margin-left: 21px; /* aligne sous le titre, après le point + gap du dot */
+    margin-top: -4px;
+  }
   .badge{
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.68rem;
@@ -191,6 +200,17 @@
     color:white;
     white-space:nowrap;
   }
+  .badge-domain{
+    background: #EFE9DA;
+    color: var(--ink-soft);
+  }
+  .badge-link{
+    background: white;
+    color: var(--son);
+    border: 1px solid var(--son);
+    text-decoration: none;
+  }
+  .badge-link:hover{ text-decoration: underline; }
   textarea.free{
     width:100%;
     min-height: 16px;
@@ -1240,21 +1260,30 @@ async function renderJournal(dateStr){
       titleEl.className = 'entry-title';
       titleEl.textContent = found.title + (found.extra ? ` — ${found.extra}` : '');
       textWrap.appendChild(titleEl);
-
-      const meta = document.createElement('div');
-      meta.className = 'entry-meta';
-      let metaHtml = '';
-      if (found.domain) metaHtml += found.domain;
-      if (found.link) metaHtml += (metaHtml ? ' · ' : '') + `<a href="${found.link}" target="_blank">lien</a>`;
-      meta.innerHTML = metaHtml;
-      textWrap.appendChild(meta);
       row.appendChild(textWrap);
 
+      const badgeRow = document.createElement('div');
+      badgeRow.className = 'badge-row';
+      if (found.domain){
+        const domBadge = document.createElement('span');
+        domBadge.className = 'badge badge-domain';
+        domBadge.textContent = found.domain;
+        badgeRow.appendChild(domBadge);
+      }
+      if (found.link){
+        const linkBadge = document.createElement('a');
+        linkBadge.className = 'badge badge-link';
+        linkBadge.href = found.link;
+        linkBadge.target = '_blank';
+        linkBadge.textContent = 'lien';
+        badgeRow.appendChild(linkBadge);
+      }
       const badge = document.createElement('span');
       badge.className = 'badge';
       badge.style.background = found.css;
       badge.textContent = found.modality;
-      row.appendChild(badge);
+      badgeRow.appendChild(badge);
+      row.appendChild(badgeRow);
 
       body.appendChild(row);
     } else {
