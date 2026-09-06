@@ -96,6 +96,17 @@
     max-width: 720px;
     margin: 0 auto;
   }
+  @media (min-width: 860px){
+    main{ max-width: 1400px; }
+    #journalContent{
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    #journalContent .subject-card{ margin-bottom: 0; }
+    .analyse-card{ max-width: 700px; }
+  }
   .panel{ display:none; }
   .panel.active{ display:block; }
 
@@ -179,12 +190,12 @@
   }
   textarea.free{
     width:100%;
-    min-height: 22px;
+    min-height: 16px;
     border:1px dashed var(--line);
     border-radius: 8px;
-    padding: 4px 10px;
+    padding: 3px 10px;
     font-family: inherit;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     resize: vertical;
     background: #FFFEFB;
   }
