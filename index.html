@@ -1206,8 +1206,13 @@ async function renderJournal(dateStr){
     heureSpan.style.fontSize = '0.8rem';
     heureSpan.style.color = 'var(--ink-soft)';
     heureSpan.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const headerRight = document.createElement('span');
+    headerRight.style.display = 'flex';
+    headerRight.style.alignItems = 'center';
+    headerRight.style.gap = '8px';
+    headerRight.appendChild(heureSpan);
     h3.innerHTML = `<span>${slot.matiere || slot.modalite || '—'}</span>`;
-    h3.appendChild(heureSpan);
+    h3.appendChild(headerRight);
     card.appendChild(h3);
 
     const body = document.createElement('div');
@@ -1283,7 +1288,8 @@ async function renderJournal(dateStr){
         saveJournalNote(dateStr, idx, val);
       });
       noteToggle._textarea.dataset.slotIdx = idx;
-      body.appendChild(noteToggle);
+      headerRight.appendChild(noteToggle._btn);
+      body.appendChild(noteToggle._textarea);
     }
 
     card.appendChild(body);
@@ -1986,8 +1992,8 @@ function buildNoteToggle(initialValue, placeholder, onSave, extraTaClass){
 
   wrap.appendChild(btn);
   wrap.appendChild(ta);
-  wrap.querySelector('textarea');
   wrap._textarea = ta;
+  wrap._btn = btn;
   return wrap;
 }
 
