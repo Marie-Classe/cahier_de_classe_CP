@@ -1,29 +1,39 @@
 // api/lib/google.js
 // Client d'authentification partagé (compte de service) pour Sheets + Drive.
 //
-// Variables d'environnement Vercel nécessaires (Project Settings > Environment Variables) :
-//   GOOGLE_SERVICE_ACCOUNT_EMAIL = cahier-de-classe-bot@cahier-de-classe-bot.iam.gserviceaccount.com
-//   GOOGLE_PRIVATE_KEY           = le champ "private_key" du fichier JSON, TEL QUEL (avec les \n)
-//   SHEET_ID                     = l'ID de "App Cahier de classe - CP (données)"
-//                                  (dans son URL : /spreadsheets/d/<SHEET_ID>/edit)
-//   PHOTOS_FOLDER_ID             = l'ID du dossier Drive "Observations — Photos"
-//                                  (dans son URL : /drive/folders/<PHOTOS_FOLDER_ID>)
+// Variable d'environnement Vercel nécessaire (Project Settings > Environment Variables) :
+//   GOOGLE_SERVICE_ACCOUNT_JSON = le CONTENU COMPLET du fichier .json téléchargé
+//                                 (ouvre le fichier, sélectionne tout, colle tel quel,
+//                                  accolades comprises — pas besoin de retoucher les \n)
+//   SHEET_ID                    = l'ID de "App Cahier de classe - CP (données)"
+//                                 (dans son URL : /spreadsheets/d/<SHEET_ID>/edit)
+//   PHOTOS_FOLDER_ID            = l'ID du dossier Drive "Observations — Photos"
+//                                 (dans son URL : /drive/folders/<PHOTOS_FOLDER_ID>)
 
 const { google } = require('googleapis');
 
-function getAuth(){
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  let key = process.env.GOOGLE_PRIVATE_KEY;
-  if (!email || !key){
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_EMAIL ou GOOGLE_PRIVATE_KEY manquant dans les variables d'environnement Vercel.");
+function getServiceAccountCredentials(){
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!raw){
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON n'est pas configuré dans les variables d'environnement Vercel.");
   }
-  // Sur Vercel, les retours à la ligne du champ private_key arrivent souvent sous forme
-  // littérale "\n" (deux caractères) plutôt qu'un vrai saut de ligne : on les reconvertit.
-  key = key.replace(/\\n/g, '\n');
+  let creds;
+  try{
+    creds = JSON.parse(raw);
+  }catch(e){
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON n'est pas un JSON valide : as-tu bien collé tout le contenu du fichier .json, accolades { } comprises ?");
+  }
+  if (!creds.client_email || !creds.private_key){
+    throw new Error("Le JSON collé ne contient pas client_email / private_key : vérifie que c'est bien le fichier de clé du compte de service.");
+  }
+  return creds;
+}
 
+function getAuth(){
+  const creds = getServiceAccountCredentials();
   return new google.auth.JWT({
-    email,
-    key,
+    email: creds.client_email,
+    key: creds.private_key,
     scopes: [
       'https://www.googleapis.com/auth/spreadsheets',
       'https://www.googleapis.com/auth/drive'
