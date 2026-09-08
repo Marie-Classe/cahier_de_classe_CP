@@ -579,6 +579,16 @@
     color: var(--ink);
   }
   .note-textarea{ margin-top: 6px; }
+  .done-checkbox{
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--gold);
+  }
+  .subject-card.card-done h3 span:first-child{
+    color: var(--card-mod-color, var(--ink));
+    font-weight: 700;
+  }
 
   .edt-week-grid{
     display: none;
@@ -1145,6 +1155,33 @@ function findAgendaEventForSlot(events, slotStartMin, slotEndMin){
 }
 
 let journalRenderSeq = 0;
+// ---------- Case "Fait" par créneau du Cahier journal ----------
+const JOURNAL_DONE_KEY = 'cahier_de_classe_journal_done_v1';
+function loadJournalDone(){
+  try{ return JSON.parse(localStorage.getItem(JOURNAL_DONE_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveJournalDone(dateStr, idx, checked){
+  const store = loadJournalDone();
+  const key = journalNoteKey(dateStr, idx);
+  if (checked) store[key] = true; else delete store[key];
+  try{ localStorage.setItem(JOURNAL_DONE_KEY, JSON.stringify(store)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function buildDoneCheckbox(dateStr, idx){
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'done-checkbox';
+  cb.title = 'Fait';
+  cb.checked = !!loadJournalDone()[journalNoteKey(dateStr, idx)];
+  cb.addEventListener('change', () => {
+    saveJournalDone(dateStr, idx, cb.checked);
+    const card = cb.closest('.subject-card');
+    if (card) card.classList.toggle('card-done', cb.checked);
+  });
+  return cb;
+}
+
 async function renderJournal(dateStr){
   const mySeq = ++journalRenderSeq;
   document.getElementById('journalDate').value = dateStr;
@@ -1196,9 +1233,17 @@ async function renderJournal(dateStr){
       heureSpan.style.fontSize = '0.8rem';
       heureSpan.style.color = 'var(--ink-soft)';
       heureSpan.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const headerRightAgenda = document.createElement('span');
+      headerRightAgenda.style.display = 'flex';
+      headerRightAgenda.style.alignItems = 'center';
+      headerRightAgenda.style.gap = '8px';
+      headerRightAgenda.appendChild(buildDoneCheckbox(dateStr, idx));
+      headerRightAgenda.appendChild(heureSpan);
       h3.innerHTML = `<span>${agendaEvent.title || '(sans titre)'}</span>`;
-      h3.appendChild(heureSpan);
+      h3.appendChild(headerRightAgenda);
       card.appendChild(h3);
+      card.style.setProperty('--card-mod-color', 'var(--gold)');
+      if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
 
       const body = document.createElement('div');
       body.className = 'subject-body';
@@ -1230,6 +1275,7 @@ async function renderJournal(dateStr){
     headerRight.style.display = 'flex';
     headerRight.style.alignItems = 'center';
     headerRight.style.gap = '8px';
+    headerRight.appendChild(buildDoneCheckbox(dateStr, idx));
     headerRight.appendChild(heureSpan);
     h3.innerHTML = `<span>${slot.matiere || slot.modalite || '—'}</span>`;
     h3.appendChild(headerRight);
@@ -1245,6 +1291,9 @@ async function renderJournal(dateStr){
     if (colorName && subjectKey){
       found = getEntryForModality(subjectKey, dateStr, colorName);
     }
+    const modDispForColor = MODALITE_DISPLAY[slot.modalite];
+    card.style.setProperty('--card-mod-color', found ? found.css : (modDispForColor ? modDispForColor.css : 'var(--ink)'));
+    if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
 
     if (found){
       const row = document.createElement('div');
