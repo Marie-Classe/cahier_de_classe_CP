@@ -1,52 +1,2659 @@
-// api/lib/google.js
-// Client d'authentification partagé (compte de service) pour Sheets + Drive.
-//
-// Variable d'environnement Vercel nécessaire (Project Settings > Environment Variables) :
-//   GOOGLE_SERVICE_ACCOUNT_JSON = le CONTENU COMPLET du fichier .json téléchargé
-//                                 (ouvre le fichier, sélectionne tout, colle tel quel,
-//                                  accolades comprises — pas besoin de retoucher les \n)
-//   SHEET_ID                    = l'ID de "App Cahier de classe - CP (données)"
-//                                 (dans son URL : /spreadsheets/d/<SHEET_ID>/edit)
-//   PHOTOS_FOLDER_ID            = l'ID du dossier Drive "Observations — Photos"
-//                                 (dans son URL : /drive/folders/<PHOTOS_FOLDER_ID>)
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cahier de classe — CP</title>
+<style>
+  :root{
+    --paper:#FBF7EF;
+    --ink:#2E2A24;
+    --ink-soft:#6B6459;
+    --line:#E4DCC9;
+    --gold:#C9A94C;
+    --son:#4682B4;
+    --modelage:#D8B978;
+    --entrainement:#BA55D3;
+    --evaluation:#FF9F1C;
+    --mission:#DC143C;
+    --autonomie:#6FAF6F;
+    --card:#FFFFFF;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    background: var(--paper);
+    color: var(--ink);
+    padding-bottom: 78px; /* place pour la barre d'onglets fixe */
+  }
+  header{
+    padding: 22px 20px 14px;
+    border-bottom: 2px solid var(--line);
+    background: linear-gradient(180deg, #FFFDF8, var(--paper));
+  }
+  header h1{
+    margin:0;
+    font-size: 1.5rem;
+    font-weight:600;
+    letter-spacing: 0.2px;
+  }
+  header p{
+    margin: 4px 0 0;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  nav.tabs{
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display:grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0;
+    padding: 6px 2px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: var(--paper);
+    border-top: 2px solid var(--line);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.04);
+    z-index: 20;
+  }
+  nav.tabs button{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    border:none;
+    background:none;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap: 2px;
+    padding: 6px 1px;
+    font-size: 0.52rem;
+    line-height:1.05;
+    color: var(--ink-soft);
+    cursor:pointer;
+    border-radius: 10px;
+  }
+  nav.tabs button svg{
+    width: 18px;
+    height: 18px;
+    stroke: var(--ink-soft);
+    fill: none;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.15s ease;
+  }
+  nav.tabs button.active{
+    color: var(--ink);
+    font-weight:600;
+    background: #FFF3DE;
+  }
+  nav.tabs button.active svg{
+    stroke: var(--gold);
+  }
+  main{
+    padding: 18px 16px 60px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  @media (min-width: 860px){
+    main{ max-width: 1400px; }
+    #journalContent{
+      column-width: 300px;
+      column-gap: 12px;
+    }
+    #journalContent .subject-card{
+      break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      display: inline-block;
+      width: 100%;
+    }
+    .analyse-card{ max-width: 700px; }
+  }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
 
-const { google } = require('googleapis');
+  .datebar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom: 18px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .datebar input[type=date]{
+    font-family: inherit;
+    padding: 8px 10px;
+    border:1px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: var(--card);
+  }
+  .datebar .navbtn{
+    border:1px solid var(--line);
+    background: var(--card);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor:pointer;
+    font-size: 0.95rem;
+  }
+  .day-label{
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-transform: capitalize;
+  }
 
-function getServiceAccountCredentials(){
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!raw){
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON n'est pas configuré dans les variables d'environnement Vercel.");
+  .subject-card{
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    margin-bottom: 14px;
+    overflow:hidden;
   }
-  let creds;
-  try{
-    creds = JSON.parse(raw);
-  }catch(e){
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON n'est pas un JSON valide : as-tu bien collé tout le contenu du fichier .json, accolades { } comprises ?");
+  .subject-card h3{
+    margin:0;
+    padding: 12px 16px;
+    font-size: 1.05rem;
+    border-bottom: 1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
   }
-  if (!creds.client_email || !creds.private_key){
-    throw new Error("Le JSON collé ne contient pas client_email / private_key : vérifie que c'est bien le fichier de clé du compte de service.");
+  .subject-body{ padding: 12px 16px 16px; }
+  .entry{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--line);
+    flex-wrap: wrap;
   }
-  return creds;
+  .entry:last-child{ border-bottom:none; }
+  .dot{
+    width:11px; height:11px; border-radius:50%;
+    margin-top: 5px;
+    flex-shrink:0;
+  }
+  .entry-text{ flex:1; min-width: 120px; }
+  .entry-title{ font-size: 0.92rem; }
+  .entry-meta{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+  .entry-meta a{ color: var(--son); text-decoration:none; }
+  .entry-meta a:hover{ text-decoration:underline; }
+  .badge-row{
+    display:flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    align-items:center;
+    margin-left: 21px; /* aligne sous le titre, après le point + gap du dot */
+    margin-top: -4px;
+  }
+  .badge{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 20px;
+    color:white;
+    white-space:nowrap;
+  }
+  .badge-domain{
+    background: #EFE9DA;
+    color: var(--ink-soft);
+  }
+  .badge-link{
+    background: white;
+    color: var(--son);
+    border: 1px solid var(--son);
+    text-decoration: none;
+  }
+  .badge-link:hover{ text-decoration: underline; }
+  textarea.free{
+    width:100%;
+    min-height: 16px;
+    border:1px dashed var(--line);
+    border-radius: 8px;
+    padding: 3px 10px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    resize: vertical;
+    background: #FFFEFB;
+  }
+  .empty-note{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--ink-soft);
+    font-size: 0.82rem;
+    margin-bottom: 6px;
+  }
+
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap: 10px 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    margin: 0 0 18px;
+  }
+  .legend span{ display:flex; align-items:center; gap:5px; }
+  .legend .dot{ margin-top:0; }
+
+  .actions{
+    display:flex;
+    gap:10px;
+    margin: 20px 0 6px;
+  }
+  button.primary{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--ink);
+    color: white;
+    border:none;
+    padding: 11px 18px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    cursor:pointer;
+  }
+  button.primary:active{ opacity:0.85; }
+  .toast{
+    position:fixed;
+    bottom: 24px;
+    left:50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color:white;
+    padding: 10px 18px;
+    border-radius: 30px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity 0.25s ease;
+  }
+  .toast.show{ opacity:1; }
+
+  .stub{
+    text-align:center;
+    padding: 60px 20px;
+    color: var(--ink-soft);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .stub h2{
+    font-family: "Iowan Old Style", Georgia, serif;
+    color: var(--ink);
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+  }
+  .stub p{ font-size: 0.88rem; line-height:1.5; max-width: 420px; margin: 0 auto; }
+
+  .eval-card{
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    margin-bottom: 16px;
+    overflow:hidden;
+  }
+  .eval-card h3{
+    margin:0;
+    padding: 12px 16px;
+    font-size: 1.05rem;
+    border-bottom: 1px solid var(--line);
+    background: #FFF9EE;
+  }
+  .eval-card .eval-meta{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    padding: 8px 16px 0;
+  }
+  .student-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 9px 16px;
+    border-bottom: 1px dashed var(--line);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.92rem;
+  }
+  .student-row:last-child{ border-bottom:none; }
+  .score-controls{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+  }
+  .score-btn{
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    border: 1.5px solid var(--evaluation);
+    background: white;
+    color: var(--evaluation);
+    font-size: 1rem;
+    font-weight:700;
+    line-height: 1;
+    cursor:pointer;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .score-btn:active{ background: #FFF3E2; }
+  .score-value{
+    min-width: 18px;
+    text-align:center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-weight:700;
+    font-size: 0.95rem;
+    color: var(--ink);
+  }
+
+  .suivi-select{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.88rem;
+    background: var(--card);
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .discipline-group{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 14px;
+    overflow:hidden;
+  }
+  .discipline-group h3{
+    margin:0;
+    padding: 12px 16px;
+    font-size: 1.02rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .domaine-block{ padding: 10px 16px; border-bottom: 1px dashed var(--line); }
+  .domaine-block:last-child{ border-bottom:none; }
+  .domaine-title{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+    text-transform: none;
+  }
+  .result-line{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size: 0.9rem;
+    padding: 4px 0;
+  }
+  .result-score{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.72rem;
+    font-weight:600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .result-score.ok{ background: var(--evaluation); color:white; }
+  .result-score.zero{ background: #EFEAE0; color: var(--ink-soft); }
+  .result-score.yellow{ background: #FFD54F; color: #5A4400; }
+  .result-score.lightgreen{ background: #A8DDA8; color: #14531A; }
+  .result-score.turquoise{ background: #4FD1C5; color: #063A35; }
+
+  .titre-block{
+    margin-bottom: 10px;
+  }
+  .titre-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-weight:600;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+  .result-line.sub-line{
+    padding-left: 10px;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+  }
+
+  .edt-card{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .edt-row{
+    display:flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .edt-input{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+    padding: 7px 8px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #FFFEFB;
+  }
+  .edt-heure{ width: 70px; flex-shrink:0; }
+  .edt-matiere{ width: 100%; }
+  .edt-modalite{ width: 100%; }
+  .edt-select-wrap{
+    flex: 1;
+    min-width: 0;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .comport-subtabs{
+    display:flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .comport-subtabs button{
+    flex:1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+    cursor:pointer;
+  }
+  .comport-subtabs button.active{
+    background: var(--ink);
+    color: white;
+    border-color: var(--ink);
+  }
+  .comport-legend-dot{
+    display:inline-block;
+    width:11px; height:11px;
+    border-radius:3px;
+    border: 1.5px solid;
+    margin-right:5px;
+    vertical-align:middle;
+  }
+  .comport-row{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 10px;
+    margin-bottom: 8px;
+  }
+  .comport-name{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.82rem;
+    flex: 1;
+    min-width: 0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .comport-quarters{
+    display:flex;
+    gap: 4px;
+  }
+  .comport-cell{
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1.5px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.68rem;
+    font-weight:700;
+    cursor:pointer;
+    color:#5a4d3a;
+    flex-shrink:0;
+    background:white;
+  }
+  .comport-star{
+    width: 24px;
+    text-align:center;
+    font-size: 1.15rem;
+    flex-shrink:0;
+  }
+  .comport-history-row{
+    display:flex;
+    align-items:center;
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.82rem;
+  }
+  .comport-history-date{
+    flex:1;
+    color: var(--ink-soft);
+  }
+  .comport-summary{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.95rem;
+    font-weight:600;
+    margin-bottom: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .edt-del{
+    border: none;
+    background: none;
+    color: var(--mission);
+    font-size: 1rem;
+    cursor:pointer;
+    padding: 0 4px;
+  }
+  .edt-comp{
+    width:100%;
+    min-height: 40px;
+    border: 1px dashed var(--line);
+    border-radius: 7px;
+    padding: 6px 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.8rem;
+    resize: vertical;
+    background: #FFFEFB;
+  }
+
+  .note-wrap{ margin-top: 4px; }
+  .note-toggle-btn{
+    border: 1px solid var(--line);
+    background: white;
+    color: var(--ink-soft);
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .note-toggle-btn.has-note{
+    background: #FFF3DE;
+    border-color: var(--gold);
+    color: var(--ink);
+  }
+  .note-textarea{ margin-top: 6px; }
+  .done-checkbox{
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--gold);
+  }
+  .subject-card.card-done h3 span:first-child{
+    color: var(--card-mod-color, var(--ink));
+    font-weight: 700;
+  }
+
+  .edt-week-grid{
+    display: none;
+  }
+  @media (min-width: 860px){
+    .edt-mobile-only{ display:none; }
+    .edt-week-grid{
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .edt-day-col h3{
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .edt-day-col .edt-day-actions{
+      display:flex;
+      gap: 6px;
+    }
+    .edt-day-col .edt-day-actions button{
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      padding: 3px 6px;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+  }
+
+  .obs-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .obs-card{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .obs-card .obs-name{
+    font-size: 0.85rem;
+    font-weight:600;
+    margin-bottom: 6px;
+  }
+  .obs-card textarea{
+    width:100%;
+    min-height: 44px;
+    border:1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.8rem;
+    resize: vertical;
+    margin-bottom: 6px;
+  }
+  .obs-card button{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.72rem;
+    border: 1px solid var(--ink);
+    background: white;
+    color: var(--ink);
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor:pointer;
+  }
+  .obs-count{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.68rem;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  .obs-log-line{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--line);
+  }
+
+  .apc-domain{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 14px;
+    overflow:hidden;
+  }
+  .apc-domain h3{
+    margin:0;
+    padding: 12px 16px;
+    font-size: 1.02rem;
+    border-bottom: 1px solid var(--line);
+    background: #FDEFEF;
+  }
+  .apc-student{
+    display:flex;
+    justify-content:space-between;
+    padding: 8px 16px;
+    border-bottom: 1px dashed var(--line);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.9rem;
+  }
+  .apc-student:last-child{ border-bottom:none; }
+  .apc-note{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.72rem;
+    color: var(--mission);
+  }
+
+  .analyse-card{
+    background: #FBF3E3;
+    border: 1px solid var(--gold);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 4px;
+    margin-bottom: 6px;
+  }
+  .analyse-card h3{
+    margin: 0 0 8px;
+    font-size: 1rem;
+    font-weight:600;
+  }
+  .analyse-card textarea{
+    width:100%;
+    min-height: 90px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.9rem;
+    resize: vertical;
+    background: #FFFEFB;
+  }
+
+  .homework-item{
+    background: var(--card);
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .homework-item h4{
+    margin:0 0 6px;
+    font-size: 1rem;
+  }
+  .homework-item p{
+    margin:0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cahier de classe — CP</h1>
+  <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="journal">
+    <svg viewBox="0 0 24 24"><path d="M4 5.5c2-1 5-1.3 8 0v13c-3-1.3-6-1-8 0v-13z"/><path d="M20 5.5c-2-1-5-1.3-8 0v13c3-1.3 6-1 8 0v-13z"/></svg>
+    <span>Journal</span>
+  </button>
+  <button class="tab-btn" data-tab="edt">
+    <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg>
+    <span>EDT</span>
+  </button>
+  <button class="tab-btn" data-tab="devoirs">
+    <svg viewBox="0 0 24 24"><path d="M14 3l4 4-9.5 9.5L4 18l1.5-4.5L14 3z"/><path d="M12.5 4.5l4 4"/></svg>
+    <span>Devoirs</span>
+  </button>
+  <button class="tab-btn" data-tab="observations">
+    <svg viewBox="0 0 24 24"><path d="M2 12c2.5-4.5 6-6.5 10-6.5s7.5 2 10 6.5c-2.5 4.5-6 6.5-10 6.5S4.5 16.5 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+    <span>Observ.</span>
+  </button>
+  <button class="tab-btn" data-tab="evaluations">
+    <svg viewBox="0 0 24 24"><path d="M6 3.5h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1z"/><path d="M15 3.5v4h4"/><path d="M8.5 13.5l2 2 4-4.5"/></svg>
+    <span>Évals</span>
+  </button>
+  <button class="tab-btn" data-tab="suivi">
+    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.8-3.2 3-4.8 5.5-4.8s4.7 1.6 5.5 4.8"/><circle cx="17" cy="9" r="2.4"/><path d="M15 14.5c1.9.2 3.5 1.6 4.1 4"/></svg>
+    <span>Suivi</span>
+  </button>
+  <button class="tab-btn" data-tab="apc">
+    <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4.3 4.3 0 0 1 7-3.3A4.3 4.3 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M12 9v4M10 11h4"/></svg>
+    <span>APC</span>
+  </button>
+  <button class="tab-btn" data-tab="comportement">
+    <svg viewBox="0 0 24 24"><path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4-3.9-3.8 5.4-.8L12 3.5z"/></svg>
+    <span>Comport.</span>
+  </button>
+</nav>
+
+<main>
+
+  <!-- CAHIER JOURNAL -->
+  <section id="journal" class="panel active">
+    <div class="datebar">
+      <button class="navbtn" id="prevDay">←</button>
+      <input type="date" id="journalDate">
+      <button class="navbtn" id="nextDay">→</button>
+    </div>
+    <div class="day-label" id="dayLabel"></div>
+    <br>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--son)"></i> Leçon</span>
+      <span><i class="dot" style="background:var(--modelage)"></i> Modelage</span>
+      <span><i class="dot" style="background:var(--entrainement)"></i> Entraînement</span>
+      <span><i class="dot" style="background:var(--evaluation)"></i> Évaluation</span>
+      <span><i class="dot" style="background:var(--mission)"></i> Mission</span>
+      <span><i class="dot" style="background:var(--autonomie)"></i> Autonomie</span>
+    </div>
+    <div id="journalContent"></div>
+
+    <div class="analyse-card">
+      <h3>📝 Analyse de pratique</h3>
+      <textarea id="analyseText" placeholder="Ce qui a bien fonctionné, ce qui a coincé, ce que je change pour demain…"></textarea>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="copyJournal">Copier pour coller dans le Google Sheet</button>
+    </div>
+  </section>
+
+  <!-- EMPLOI DU TEMPS -->
+  <section id="edt" class="panel">
+    <div class="datebar edt-mobile-only">
+      <select id="edtWeekday" class="suivi-select">
+        <option value="lundi">Lundi</option>
+        <option value="mardi">Mardi</option>
+        <option value="jeudi">Jeudi</option>
+        <option value="vendredi">Vendredi</option>
+      </select>
+    </div>
+    <p class="empty-note" style="margin-bottom:14px;">Les modifications s'appliquent tout de suite au Cahier journal et aux Devoirs. Le bouton "Copier" colle à partir de la colonne "Heure" (B) du bloc du jour dans la feuille "Emploi du temps".</p>
+    <div id="edtContent" class="edt-mobile-only"></div>
+    <div class="actions edt-mobile-only" style="flex-wrap:wrap; row-gap:8px;">
+      <button class="primary" id="addEdtSlot">+ Ajouter un créneau</button>
+      <button class="primary" id="copyEdt">Copier pour coller dans le Google Sheet</button>
+      <button id="resetEdt" style="font-family:-apple-system,sans-serif;font-size:0.82rem;background:white;color:var(--mission);border:1px solid var(--mission);border-radius:10px;padding:10px 14px;cursor:pointer;">Réinitialiser ce jour</button>
+    </div>
+    <div id="edtWeekGrid" class="edt-week-grid"></div>
+  </section>
+
+  <!-- DEVOIRS -->
+  <section id="devoirs" class="panel">
+    <div class="datebar">
+      <button class="navbtn" id="prevDayHw">←</button>
+      <input type="date" id="hwDate">
+      <button class="navbtn" id="nextDayHw">→</button>
+    </div>
+    <div class="day-label" id="hwDayLabel"></div>
+    <br>
+    <div id="hwContent"></div>
+    <div class="actions">
+      <button class="primary" id="copyHw">Copier pour coller dans le Google Sheet</button>
+    </div>
+  </section>
+
+  <!-- OBSERVATIONS -->
+  <section id="observations" class="panel">
+    <div class="datebar">
+      <select id="obsStudentFilter" class="suivi-select"></select>
+    </div>
+    <div class="obs-grid" id="obsGrid"></div>
+    <div class="actions">
+      <button class="primary" id="copyObs">Copier pour coller dans le Google Sheet</button>
+    </div>
+  </section>
+
+  <!-- EVALUATIONS -->
+  <section id="evaluations" class="panel">
+    <div class="datebar">
+      <button class="navbtn" id="prevDayEval">←</button>
+      <input type="date" id="evalDate">
+      <button class="navbtn" id="nextDayEval">→</button>
+    </div>
+    <div class="day-label" id="evalDayLabel"></div>
+    <br>
+    <div id="evalContent"></div>
+    <div class="actions">
+      <button class="primary" id="copyEval">Copier pour coller dans le Google Sheet</button>
+    </div>
+  </section>
+
+  <section id="suivi" class="panel">
+    <div class="datebar" style="flex-wrap:wrap; gap:8px;">
+      <select id="suiviStudent" class="suivi-select"></select>
+    </div>
+    <div class="datebar" style="flex-wrap:wrap; gap:8px; margin-top:-6px;">
+      <select id="suiviDiscipline" class="suivi-select"></select>
+      <select id="suiviDomaine" class="suivi-select"></select>
+    </div>
+    <div id="suiviContent"></div>
+  </section>
+
+  <!-- APC -->
+  <section id="apc" class="panel">
+    <div id="apcContent"></div>
+  </section>
+
+  <!-- COMPORTEMENT -->
+  <section id="comportement" class="panel">
+    <div class="comport-subtabs">
+      <button class="comport-subtab-btn active" data-sub="jour">Vue du jour</button>
+      <button class="comport-subtab-btn" data-sub="eleve">Vue par élève</button>
+    </div>
+
+    <div id="comportJourView">
+      <div class="datebar">
+        <button class="navbtn" id="prevDayComport">←</button>
+        <input type="date" id="comportDate">
+        <button class="navbtn" id="nextDayComport">→</button>
+      </div>
+      <div class="day-label" id="comportDayLabel"></div>
+      <br>
+      <div class="legend" style="flex-direction:column; align-items:flex-start; gap:4px;">
+        <span><i class="comport-legend-dot" style="background:#FFF3B0;border-color:#E0C64A"></i> 1er rappel</span>
+        <span><i class="comport-legend-dot" style="background:#FFB74D;border-color:#E0932A"></i> 2e rappel (étoile du jour perdue)</span>
+        <span><i class="comport-legend-dot" style="background:#EF5350;border-color:#C62828"></i> 3e rappel — exclusion momentanée</span>
+        <span><i class="comport-legend-dot" style="background:#7B4FA0;border-color:#5C3A78"></i> Contacter les parents</span>
+      </div>
+      <div id="comportJourContent"></div>
+    </div>
+
+    <div id="comportEleveView" style="display:none;">
+      <div class="datebar">
+        <select id="comportStudent" class="suivi-select"></select>
+      </div>
+      <div id="comportEleveContent"></div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUBJECT_DATA = {"Oral": {"date_cols": {"3": "2026-09-03", "4": "2026-09-07", "5": "2026-09-10", "6": "2026-09-14", "7": "2026-09-17", "8": "2026-09-21", "9": "2026-09-24", "10": "2026-09-28", "11": "2026-10-01", "12": "2026-10-05", "13": "2026-10-08", "14": "2026-10-12", "15": "2026-11-02", "16": "2026-11-05", "17": "2026-11-09", "18": "2026-11-12", "19": "2026-11-16", "20": "2026-11-19", "21": "2026-11-23", "22": "2026-11-26", "23": "2026-11-30", "24": "2026-12-03", "25": "2026-12-07", "26": "2026-12-10", "27": "2027-01-04", "28": "2027-01-07", "29": "2027-01-11", "30": "2027-01-14", "31": "2027-01-18", "32": "2027-01-21", "33": "2027-01-25", "34": "2027-01-28", "35": "2027-02-01", "36": "2027-02-04", "37": "2027-02-08", "38": "2027-02-11", "39": "2027-03-01", "40": "2027-03-04", "41": "2027-03-08", "42": "2027-03-11", "43": "2027-03-15", "44": "2027-03-18", "45": "2027-03-22", "46": "2027-03-25", "47": "2027-03-29", "48": "2027-04-01", "49": "2027-04-19", "50": "2027-04-26", "51": "2027-04-29", "52": "2027-05-03", "53": "2027-05-06", "54": "2027-05-10", "55": "2027-05-13", "56": "2027-05-17", "57": "2027-05-20", "58": "2027-05-24", "59": "2027-05-27", "60": "2027-05-31", "61": "2027-06-03", "62": "2027-06-07", "63": "2027-06-10", "64": "2027-06-14", "65": "2027-06-17", "66": "2027-06-21", "67": "2027-06-24", "68": "1900-03-06", "69": "1900-03-07", "70": "1900-03-08", "71": "1900-03-09"}, "rows": [{"title": "Poésie de la rentrée", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"3": {"v": "L", "c": "FF4682B4"}, "4": {"v": "M", "c": "FFF5DEB3"}, "5": {"v": "E1", "c": "FFBA55D3"}, "6": {"v": "E2", "c": "FFBA55D3"}, "7": {"v": "E1", "c": "FFFFA500"}, "8": {"v": "E3", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFFFA500"}, "11": {"v": "E4", "c": "FFBA55D3"}, "12": {"v": "Mission", "c": "FFDC143C"}, "15": {"v": "E3", "c": "FFFFA500"}, "17": {"v": "E5", "c": "FFBA55D3"}, "20": {"v": "E6", "c": "FFBA55D3"}, "24": {"v": "E4", "c": "FFFFA500"}, "28": {"v": "E7", "c": "FFBA55D3"}, "35": {"v": "E5", "c": "FFFFA500"}, "41": {"v": "E8", "c": "FFBA55D3"}, "50": {"v": "E8", "c": "FFFFA500"}, "58": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Écouter et répéter une phrase", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"4": {"v": "L", "c": "FF4682B4"}, "5": {"v": "M", "c": "FFF5DEB3"}, "6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}, "36": {"v": "E5", "c": "FFFFA500"}, "42": {"v": "E8", "c": "FFBA55D3"}, "51": {"v": "E8", "c": "FFFFA500"}, "59": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Décrire une image, une scène lue...", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}, "37": {"v": "E5", "c": "FFFFA500"}, "43": {"v": "E8", "c": "FFBA55D3"}, "52": {"v": "E8", "c": "FFFFA500"}, "60": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Verbaliser une action faite dans l'histoire", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}, "38": {"v": "E5", "c": "FFFFA500"}, "44": {"v": "E8", "c": "FFBA55D3"}, "53": {"v": "E8", "c": "FFFFA500"}, "61": {"v": "E9", "c": "FFBA55D3"}, "68": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Répondre par une phrase", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}, "39": {"v": "E5", "c": "FFFFA500"}, "45": {"v": "E8", "c": "FFBA55D3"}, "54": {"v": "E8", "c": "FFFFA500"}, "62": {"v": "E9", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Poésie des jours de la semaine 1", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}, "40": {"v": "E5", "c": "FFFFA500"}, "46": {"v": "E8", "c": "FFBA55D3"}, "55": {"v": "E8", "c": "FFFFA500"}, "63": {"v": "E9", "c": "FFBA55D3"}, "70": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Mémoriser les informations importantes", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}, "41": {"v": "E5", "c": "FFFFA500"}, "47": {"v": "E8", "c": "FFBA55D3"}, "56": {"v": "E8", "c": "FFFFA500"}, "64": {"v": "E9", "c": "FFBA55D3"}, "71": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Reformuler oralement", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "35": {"v": "E7", "c": "FFBA55D3"}, "42": {"v": "E5", "c": "FFFFA500"}, "48": {"v": "E8", "c": "FFBA55D3"}, "57": {"v": "E8", "c": "FFFFA500"}, "65": {"v": "E9", "c": "FFBA55D3"}, "68": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Raconter avec images séquentielles", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}, "36": {"v": "E7", "c": "FFBA55D3"}, "43": {"v": "E5", "c": "FFFFA500"}, "49": {"v": "E8", "c": "FFBA55D3"}, "58": {"v": "E8", "c": "FFFFA500"}, "66": {"v": "E9", "c": "FFBA55D3"}, "69": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Utiliser « puis »", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}, "37": {"v": "E7", "c": "FFBA55D3"}, "44": {"v": "E5", "c": "FFFFA500"}, "50": {"v": "E8", "c": "FFBA55D3"}, "59": {"v": "E8", "c": "FFFFA500"}, "67": {"v": "E9", "c": "FFBA55D3"}, "70": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Dire une émotion de soi ou d'un personnage", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}, "38": {"v": "E7", "c": "FFBA55D3"}, "45": {"v": "E5", "c": "FFFFA500"}, "51": {"v": "E8", "c": "FFBA55D3"}, "60": {"v": "E8", "c": "FFFFA500"}, "71": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Poésie sur l'automne 1", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E4", "c": "FFFFA500"}, "39": {"v": "E7", "c": "FFBA55D3"}, "46": {"v": "E5", "c": "FFFFA500"}, "52": {"v": "E8", "c": "FFBA55D3"}, "61": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Poser/répondre à une question", "domain": "Participer à des échanges", "link": null, "extra": null, "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E4", "c": "FFFFA500"}, "40": {"v": "E7", "c": "FFBA55D3"}, "47": {"v": "E5", "c": "FFFFA500"}, "53": {"v": "E8", "c": "FFBA55D3"}, "62": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Reformuler une histoire", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}, "37": {"v": "E4", "c": "FFFFA500"}, "41": {"v": "E7", "c": "FFBA55D3"}, "48": {"v": "E5", "c": "FFFFA500"}, "54": {"v": "E8", "c": "FFBA55D3"}, "63": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Anticiper la suite", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}, "38": {"v": "E4", "c": "FFFFA500"}, "42": {"v": "E7", "c": "FFBA55D3"}, "49": {"v": "E5", "c": "FFFFA500"}, "55": {"v": "E8", "c": "FFBA55D3"}, "64": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Justifier avec « parce que »", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E6", "c": "FFBA55D3"}, "39": {"v": "E4", "c": "FFFFA500"}, "43": {"v": "E7", "c": "FFBA55D3"}, "50": {"v": "E5", "c": "FFFFA500"}, "56": {"v": "E8", "c": "FFBA55D3"}, "65": {"v": "E8", "c": "FFFFA500"}, "68": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Comparer personnages", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}, "36": {"v": "E6", "c": "FFBA55D3"}, "40": {"v": "E4", "c": "FFFFA500"}, "44": {"v": "E7", "c": "FFBA55D3"}, "51": {"v": "E5", "c": "FFFFA500"}, "57": {"v": "E8", "c": "FFBA55D3"}, "66": {"v": "E8", "c": "FFFFA500"}, "69": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Raconter dans l’ordre", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}, "37": {"v": "E6", "c": "FFBA55D3"}, "41": {"v": "E4", "c": "FFFFA500"}, "45": {"v": "E7", "c": "FFBA55D3"}, "52": {"v": "E5", "c": "FFFFA500"}, "58": {"v": "E8", "c": "FFBA55D3"}, "67": {"v": "E8", "c": "FFFFA500"}, "70": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Poésie", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}, "38": {"v": "E6", "c": "FFBA55D3"}, "42": {"v": "E4", "c": "FFFFA500"}, "46": {"v": "E7", "c": "FFBA55D3"}, "53": {"v": "E5", "c": "FFFFA500"}, "59": {"v": "E8", "c": "FFBA55D3"}, "71": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Résumer oralement", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}, "36": {"v": "E5", "c": "FFBA55D3"}, "39": {"v": "E6", "c": "FFBA55D3"}, "43": {"v": "E4", "c": "FFFFA500"}, "47": {"v": "E7", "c": "FFBA55D3"}, "54": {"v": "E5", "c": "FFFFA500"}, "60": {"v": "E8", "c": "FFBA55D3"}, "68": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Réutiliser vocabulaire", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E3", "c": "FFFFA500"}, "37": {"v": "E5", "c": "FFBA55D3"}, "40": {"v": "E6", "c": "FFBA55D3"}, "44": {"v": "E4", "c": "FFFFA500"}, "48": {"v": "E7", "c": "FFBA55D3"}, "55": {"v": "E5", "c": "FFFFA500"}, "61": {"v": "E8", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Décrire précisément", "domain": "Écouter pour comprendre", "link": null, "extra": null, "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}, "36": {"v": "E3", "c": "FFFFA500"}, "38": {"v": "E5", "c": "FFBA55D3"}, "41": {"v": "E6", "c": "FFBA55D3"}, "45": {"v": "E4", "c": "FFFFA500"}, "49": {"v": "E7", "c": "FFBA55D3"}, "56": {"v": "E5", "c": "FFFFA500"}, "62": {"v": "E8", "c": "FFBA55D3"}, "70": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Expliquer son raisonnement", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}, "37": {"v": "E3", "c": "FFFFA500"}, "39": {"v": "E5", "c": "FFBA55D3"}, "42": {"v": "E6", "c": "FFBA55D3"}, "46": {"v": "E4", "c": "FFFFA500"}, "50": {"v": "E7", "c": "FFBA55D3"}, "57": {"v": "E5", "c": "FFFFA500"}, "63": {"v": "E8", "c": "FFBA55D3"}, "71": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Participer à un échange", "domain": "Participer à des échanges", "link": null, "extra": null, "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}, "35": {"v": "Mission", "c": "FFDC143C"}, "38": {"v": "E3", "c": "FFFFA500"}, "40": {"v": "E5", "c": "FFBA55D3"}, "43": {"v": "E6", "c": "FFBA55D3"}, "47": {"v": "E4", "c": "FFFFA500"}, "51": {"v": "E7", "c": "FFBA55D3"}, "58": {"v": "E5", "c": "FFFFA500"}, "64": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "Raconter une expérience", "domain": "Participer à des échanges", "link": null, "extra": null, "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}, "35": {"v": "E4", "c": "FFBA55D3"}, "36": {"v": "Mission", "c": "FFDC143C"}, "39": {"v": "E3", "c": "FFFFA500"}, "41": {"v": "E5", "c": "FFBA55D3"}, "44": {"v": "E6", "c": "FFBA55D3"}, "48": {"v": "E4", "c": "FFFFA500"}, "52": {"v": "E7", "c": "FFBA55D3"}, "59": {"v": "E5", "c": "FFFFA500"}, "65": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "Présenter devant le groupe", "domain": "Participer à des échanges", "link": null, "extra": null, "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFFFA500"}, "36": {"v": "E4", "c": "FFBA55D3"}, "37": {"v": "Mission", "c": "FFDC143C"}, "40": {"v": "E3", "c": "FFFFA500"}, "42": {"v": "E5", "c": "FFBA55D3"}, "45": {"v": "E6", "c": "FFBA55D3"}, "49": {"v": "E4", "c": "FFFFA500"}, "53": {"v": "E7", "c": "FFBA55D3"}, "60": {"v": "E5", "c": "FFFFA500"}, "66": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "Donner son avis", "domain": "Participer à des échanges", "link": null, "extra": null, "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFFFA500"}, "37": {"v": "E4", "c": "FFBA55D3"}, "38": {"v": "Mission", "c": "FFDC143C"}, "41": {"v": "E3", "c": "FFFFA500"}, "43": {"v": "E5", "c": "FFBA55D3"}, "46": {"v": "E6", "c": "FFBA55D3"}, "50": {"v": "E4", "c": "FFFFA500"}, "54": {"v": "E7", "c": "FFBA55D3"}, "61": {"v": "E5", "c": "FFFFA500"}, "67": {"v": "E8", "c": "FFBA55D3"}, "68": {"v": "E7", "c": "FFFFA500"}}}, {"title": "Raconter une histoire entière", "domain": "Dire pour être compris", "link": null, "extra": null, "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFBA55D3"}, "34": {"v": "E1", "c": "FFFFA500"}, "35": {"v": "E3", "c": "FFBA55D3"}, "37": {"v": "E2", "c": "FFFFA500"}, "38": {"v": "E4", "c": "FFBA55D3"}, "39": {"v": "Mission", "c": "FFDC143C"}, "42": {"v": "E3", "c": "FFFFA500"}, "44": {"v": "E5", "c": "FFBA55D3"}, "47": {"v": "E6", "c": "FFBA55D3"}, "51": {"v": "E4", "c": "FFFFA500"}, "55": {"v": "E7", "c": "FFBA55D3"}, "62": {"v": "E5", "c": "FFFFA500"}, "69": {"v": "E7", "c": "FFFFA500"}}}, {"title": "Expliquer une procédure", "domain": "Participer à des échanges", "link": null, "extra": null, "cells": {"31": {"v": "L", "c": "FF4682B4"}, "32": {"v": "M", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFBA55D3"}, "35": {"v": "E1", "c": "FFFFA500"}, "36": {"v": "E3", "c": "FFBA55D3"}, "38": {"v": "E2", "c": "FFFFA500"}, "39": {"v": "E4", "c": "FFBA55D3"}, "40": {"v": "Mission", "c": "FFDC143C"}, "43": {"v": "E3", "c": "FFFFA500"}, "45": {"v": "E5", "c": "FFBA55D3"}, "48": {"v": "E6", "c": "FFBA55D3"}, "52": {"v": "E4", "c": "FFFFA500"}, "56": {"v": "E7", "c": "FFBA55D3"}, "63": {"v": "E5", "c": "FFFFA500"}, "70": {"v": "E7", "c": "FFFFA500"}}}, {"title": "Débat guidé", "domain": "Participer à des échanges", "link": null, "extra": null, "cells": {"32": {"v": "L", "c": "FF4682B4"}, "33": {"v": "M", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFBA55D3"}, "36": {"v": "E1", "c": "FFFFA500"}, "37": {"v": "E3", "c": "FFBA55D3"}, "39": {"v": "E2", "c": "FFFFA500"}, "40": {"v": "E4", "c": "FFBA55D3"}, "41": {"v": "Mission", "c": "FFDC143C"}, "44": {"v": "E3", "c": "FFFFA500"}, "46": {"v": "E5", "c": "FFBA55D3"}, "49": {"v": "E6", "c": "FFBA55D3"}, "53": {"v": "E4", "c": "FFFFA500"}, "57": {"v": "E7", "c": "FFBA55D3"}, "64": {"v": "E5", "c": "FFFFA500"}, "71": {"v": "E7", "c": "FFFFA500"}}}]}, "Lecture": {"date_cols": {"5": "2026-09-03", "6": "2026-09-04", "7": "2026-09-08", "8": "2026-09-10", "9": "2026-09-11", "10": "2026-09-15", "11": "2026-09-17", "12": "2026-09-18", "13": "2026-09-22", "14": "2026-09-25", "15": "2026-09-29", "16": "2026-10-02", "17": "2026-10-06", "18": "2026-10-09", "19": "2026-10-13", "20": "2026-10-16", "21": "2026-10-20", "22": "2026-10-23", "23": "2026-10-27", "24": "2026-10-30", "25": "2026-11-03", "26": "2026-11-06", "27": "2026-11-10", "28": "2026-11-13", "29": "2026-11-17", "30": "2026-11-20", "31": "2026-11-24", "32": "2026-11-27", "33": "2026-12-01", "34": "2026-12-04", "35": "2026-12-08", "36": "2026-12-11", "37": "2026-12-15", "38": "2026-12-18", "39": "2026-12-22", "40": "2026-12-25", "41": "2026-12-29", "42": "2027-01-01", "43": "2027-01-05", "44": "2027-01-08", "45": "2027-01-12", "46": "2027-01-15", "47": "2027-01-18", "48": "2027-01-22", "49": "2027-01-25", "50": "2027-01-28", "51": "2027-01-31", "52": "2027-02-01", "53": "2027-02-03", "54": "2027-02-04", "55": "2027-02-07", "56": "2027-02-08", "57": "2027-02-10", "58": "2027-02-11", "59": "2027-02-28", "60": "2027-03-01", "61": "2027-03-03", "62": "2027-03-04", "63": "2027-03-07", "64": "2027-03-08", "65": "2027-03-10", "66": "2027-03-11", "67": "2027-03-14", "68": "2027-03-15", "69": "2027-03-17", "70": "2027-03-18", "71": "2027-03-21", "72": "2027-03-22", "73": "2027-03-24", "74": "2027-03-25", "75": "2027-03-28", "76": "2027-03-29", "77": "2027-03-31", "78": "2027-04-01", "79": "2027-04-04", "80": "2027-04-05", "81": "2027-04-07", "82": "2027-04-08", "83": "2027-04-11", "84": "2027-04-12", "85": "2027-04-14", "86": "2027-04-15", "87": "2027-05-02", "88": "2027-05-03", "89": "2027-05-05", "90": "2027-05-06", "91": "2027-05-09", "92": "2027-05-10", "93": "2027-05-12", "94": "2027-05-13", "95": "2027-05-16", "96": "2027-05-17", "97": "2027-05-19", "98": "2027-05-20", "99": "2027-05-23", "100": "2027-05-24", "101": "2027-05-26", "102": "2027-05-27", "103": "2027-05-30", "104": "2027-05-31", "105": "2027-06-02", "106": "2027-06-03", "107": "2027-06-06", "108": "2027-06-07", "109": "2027-06-09", "110": "2027-06-10", "111": "2027-06-27", "112": "2027-06-28", "113": "2027-07-04", "114": "2027-07-05", "115": "2027-07-07", "116": "2027-07-08", "117": "2027-07-12", "118": "2027-07-14", "119": "2027-07-15", "120": "2027-07-18", "121": "2027-07-19", "122": "2027-07-21", "123": "2027-07-22", "124": "2027-07-25", "125": "2027-07-26", "126": "2027-07-28", "127": "2027-07-29", "128": "2027-08-01", "129": "2027-08-02", "130": "2027-08-04", "131": "2027-08-05", "132": "2027-08-08", "133": "2027-08-09", "134": "2027-08-11", "135": "2027-08-12", "136": "2027-08-15", "137": "2027-08-16", "138": "2027-08-18", "139": "2027-08-19", "140": "2027-08-21", "141": "2027-08-22", "142": "2027-08-25", "143": "2027-08-26"}, "rows": [{"title": "i ", "domain": "Identifier les mots de manière de plus en plus aisée", "link": "https://sites.google.com/view/madame-flichy/lecture-et-%C3%A9criture/lecture-page-10-i?authuser=0", "extra": "page 10", "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "M3", "c": "FFF5DEB3"}, "9": {"v": "E34", "c": "FFBA55D3"}, "10": {"v": "M4", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E5", "c": "FFBA55D3"}, "13": {"v": "E34", "c": "FFFFA500"}, "14": {"v": "E6", "c": "FFBA55D3"}, "15": {"v": "E5", "c": "FFFFA500"}, "16": {"v": "E6", "c": "FFFFA500"}, "18": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E7", "c": "FFBA55D3"}, "32": {"v": "E8", "c": "FFBA55D3"}, "40": {"v": "E9", "c": "FFBA55D3"}, "49": {"v": "E10", "c": "FFBA55D3"}, "59": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "é", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 11", "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "M3", "c": "FFF5DEB3"}, "10": {"v": "E34", "c": "FFBA55D3"}, "11": {"v": "M4", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E5", "c": "FFBA55D3"}, "14": {"v": "E34", "c": "FFFFA500"}, "15": {"v": "E6", "c": "FFBA55D3"}, "16": {"v": "E5", "c": "FFFFA500"}, "17": {"v": "E6", "c": "FFFFA500"}, "19": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E7", "c": "FFBA55D3"}, "33": {"v": "E8", "c": "FFBA55D3"}, "41": {"v": "E9", "c": "FFBA55D3"}, "50": {"v": "E10", "c": "FFBA55D3"}, "60": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "l", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 12", "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "M3", "c": "FFF5DEB3"}, "11": {"v": "E34", "c": "FFBA55D3"}, "12": {"v": "M4", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E5", "c": "FFBA55D3"}, "15": {"v": "E34", "c": "FFFFA500"}, "16": {"v": "E6", "c": "FFBA55D3"}, "17": {"v": "E5", "c": "FFFFA500"}, "18": {"v": "E6", "c": "FFFFA500"}, "20": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E7", "c": "FFBA55D3"}, "34": {"v": "E8", "c": "FFBA55D3"}, "42": {"v": "E9", "c": "FFBA55D3"}, "51": {"v": "E10", "c": "FFBA55D3"}, "61": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "e", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 14", "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "M3", "c": "FFF5DEB3"}, "12": {"v": "E34", "c": "FFBA55D3"}, "13": {"v": "M4", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E5", "c": "FFBA55D3"}, "16": {"v": "E34", "c": "FFFFA500"}, "17": {"v": "E6", "c": "FFBA55D3"}, "18": {"v": "E5", "c": "FFFFA500"}, "19": {"v": "E6", "c": "FFFFA500"}, "21": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E7", "c": "FFBA55D3"}, "35": {"v": "E8", "c": "FFBA55D3"}, "43": {"v": "E9", "c": "FFBA55D3"}, "52": {"v": "E10", "c": "FFBA55D3"}, "62": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "u", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 16", "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "M3", "c": "FFF5DEB3"}, "13": {"v": "E34", "c": "FFBA55D3"}, "14": {"v": "M4", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E5", "c": "FFBA55D3"}, "17": {"v": "E34", "c": "FFFFA500"}, "18": {"v": "E6", "c": "FFBA55D3"}, "19": {"v": "E5", "c": "FFFFA500"}, "20": {"v": "E6", "c": "FFFFA500"}, "22": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E7", "c": "FFBA55D3"}, "36": {"v": "E8", "c": "FFBA55D3"}, "44": {"v": "E9", "c": "FFBA55D3"}, "53": {"v": "E10", "c": "FFBA55D3"}, "63": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "a", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 18", "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "M3", "c": "FFF5DEB3"}, "14": {"v": "E34", "c": "FFBA55D3"}, "15": {"v": "M4", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E5", "c": "FFBA55D3"}, "18": {"v": "E34", "c": "FFFFA500"}, "19": {"v": "E6", "c": "FFBA55D3"}, "20": {"v": "E5", "c": "FFFFA500"}, "21": {"v": "E6", "c": "FFFFA500"}, "23": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E7", "c": "FFBA55D3"}, "37": {"v": "E8", "c": "FFBA55D3"}, "45": {"v": "E9", "c": "FFBA55D3"}, "54": {"v": "E10", "c": "FFBA55D3"}, "64": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "o", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 20", "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "M3", "c": "FFF5DEB3"}, "15": {"v": "E34", "c": "FFBA55D3"}, "16": {"v": "M4", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "19": {"v": "E34", "c": "FFFFA500"}, "20": {"v": "E6", "c": "FFBA55D3"}, "21": {"v": "E5", "c": "FFFFA500"}, "22": {"v": "E6", "c": "FFFFA500"}, "24": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E7", "c": "FFBA55D3"}, "38": {"v": "E8", "c": "FFBA55D3"}, "46": {"v": "E9", "c": "FFBA55D3"}, "55": {"v": "E10", "c": "FFBA55D3"}, "65": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "s", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 22", "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "M3", "c": "FFF5DEB3"}, "16": {"v": "E34", "c": "FFBA55D3"}, "17": {"v": "M4", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "20": {"v": "E34", "c": "FFFFA500"}, "21": {"v": "E6", "c": "FFBA55D3"}, "22": {"v": "E5", "c": "FFFFA500"}, "23": {"v": "E6", "c": "FFFFA500"}, "25": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E7", "c": "FFBA55D3"}, "39": {"v": "E8", "c": "FFBA55D3"}, "47": {"v": "E9", "c": "FFBA55D3"}, "56": {"v": "E10", "c": "FFBA55D3"}, "66": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "r", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 24", "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "M3", "c": "FFF5DEB3"}, "17": {"v": "E34", "c": "FFBA55D3"}, "18": {"v": "M4", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E34", "c": "FFFFA500"}, "22": {"v": "E6", "c": "FFBA55D3"}, "23": {"v": "E5", "c": "FFFFA500"}, "24": {"v": "E6", "c": "FFFFA500"}, "26": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E7", "c": "FFBA55D3"}, "40": {"v": "E8", "c": "FFBA55D3"}, "48": {"v": "E9", "c": "FFBA55D3"}, "57": {"v": "E10", "c": "FFBA55D3"}, "67": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "t", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 26", "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "M3", "c": "FFF5DEB3"}, "18": {"v": "E34", "c": "FFBA55D3"}, "19": {"v": "M4", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E34", "c": "FFFFA500"}, "23": {"v": "E6", "c": "FFBA55D3"}, "24": {"v": "E5", "c": "FFFFA500"}, "25": {"v": "E6", "c": "FFFFA500"}, "27": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E7", "c": "FFBA55D3"}, "41": {"v": "E8", "c": "FFBA55D3"}, "49": {"v": "E9", "c": "FFBA55D3"}, "58": {"v": "E10", "c": "FFBA55D3"}, "68": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "c", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 28", "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "M3", "c": "FFF5DEB3"}, "19": {"v": "E34", "c": "FFBA55D3"}, "20": {"v": "M4", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E34", "c": "FFFFA500"}, "24": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E5", "c": "FFFFA500"}, "26": {"v": "E6", "c": "FFFFA500"}, "28": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E7", "c": "FFBA55D3"}, "42": {"v": "E8", "c": "FFBA55D3"}, "50": {"v": "E9", "c": "FFBA55D3"}, "59": {"v": "E10", "c": "FFBA55D3"}, "69": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "c ch", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 30", "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "M3", "c": "FFF5DEB3"}, "20": {"v": "E34", "c": "FFBA55D3"}, "21": {"v": "M4", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E34", "c": "FFFFA500"}, "25": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E5", "c": "FFFFA500"}, "27": {"v": "E6", "c": "FFFFA500"}, "29": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E7", "c": "FFBA55D3"}, "43": {"v": "E8", "c": "FFBA55D3"}, "51": {"v": "E9", "c": "FFBA55D3"}, "60": {"v": "E10", "c": "FFBA55D3"}, "70": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "n", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 32", "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "M3", "c": "FFF5DEB3"}, "21": {"v": "E34", "c": "FFBA55D3"}, "22": {"v": "M4", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E34", "c": "FFFFA500"}, "26": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E5", "c": "FFFFA500"}, "28": {"v": "E6", "c": "FFFFA500"}, "30": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E6", "c": "FFBA55D3"}, "37": {"v": "E7", "c": "FFBA55D3"}, "44": {"v": "E8", "c": "FFBA55D3"}, "52": {"v": "E9", "c": "FFBA55D3"}, "61": {"v": "E10", "c": "FFBA55D3"}, "71": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "m", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 34", "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "M3", "c": "FFF5DEB3"}, "22": {"v": "E34", "c": "FFBA55D3"}, "23": {"v": "M4", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E34", "c": "FFFFA500"}, "27": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E5", "c": "FFFFA500"}, "29": {"v": "E6", "c": "FFFFA500"}, "31": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E6", "c": "FFBA55D3"}, "38": {"v": "E7", "c": "FFBA55D3"}, "45": {"v": "E8", "c": "FFBA55D3"}, "53": {"v": "E9", "c": "FFBA55D3"}, "62": {"v": "E10", "c": "FFBA55D3"}, "72": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "f", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 44", "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "M3", "c": "FFF5DEB3"}, "23": {"v": "E34", "c": "FFBA55D3"}, "24": {"v": "M4", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E34", "c": "FFFFA500"}, "28": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E5", "c": "FFFFA500"}, "30": {"v": "E6", "c": "FFFFA500"}, "32": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E6", "c": "FFBA55D3"}, "39": {"v": "E7", "c": "FFBA55D3"}, "46": {"v": "E8", "c": "FFBA55D3"}, "54": {"v": "E9", "c": "FFBA55D3"}, "63": {"v": "E10", "c": "FFBA55D3"}, "73": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "d", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 46", "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "M3", "c": "FFF5DEB3"}, "24": {"v": "E34", "c": "FFBA55D3"}, "25": {"v": "M4", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E34", "c": "FFFFA500"}, "29": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E5", "c": "FFFFA500"}, "31": {"v": "E6", "c": "FFFFA500"}, "33": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E6", "c": "FFBA55D3"}, "40": {"v": "E7", "c": "FFBA55D3"}, "47": {"v": "E8", "c": "FFBA55D3"}, "55": {"v": "E9", "c": "FFBA55D3"}, "64": {"v": "E10", "c": "FFBA55D3"}, "74": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "v", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 48", "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "M3", "c": "FFF5DEB3"}, "25": {"v": "E34", "c": "FFBA55D3"}, "26": {"v": "M4", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E34", "c": "FFFFA500"}, "30": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E5", "c": "FFFFA500"}, "32": {"v": "E6", "c": "FFFFA500"}, "34": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E6", "c": "FFBA55D3"}, "41": {"v": "E7", "c": "FFBA55D3"}, "48": {"v": "E8", "c": "FFBA55D3"}, "56": {"v": "E9", "c": "FFBA55D3"}, "65": {"v": "E10", "c": "FFBA55D3"}, "75": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "è ê", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 50", "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "M3", "c": "FFF5DEB3"}, "26": {"v": "E34", "c": "FFBA55D3"}, "27": {"v": "M4", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E34", "c": "FFFFA500"}, "31": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E5", "c": "FFFFA500"}, "33": {"v": "E6", "c": "FFFFA500"}, "35": {"v": "Mission", "c": "FFDC143C"}, "36": {"v": "E6", "c": "FFBA55D3"}, "42": {"v": "E7", "c": "FFBA55D3"}, "49": {"v": "E8", "c": "FFBA55D3"}, "57": {"v": "E9", "c": "FFBA55D3"}, "66": {"v": "E10", "c": "FFBA55D3"}, "76": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ou", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 52", "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "M3", "c": "FFF5DEB3"}, "27": {"v": "E34", "c": "FFBA55D3"}, "28": {"v": "M4", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E34", "c": "FFFFA500"}, "32": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E5", "c": "FFFFA500"}, "34": {"v": "E6", "c": "FFFFA500"}, "36": {"v": "Mission", "c": "FFDC143C"}, "37": {"v": "E6", "c": "FFBA55D3"}, "43": {"v": "E7", "c": "FFBA55D3"}, "50": {"v": "E8", "c": "FFBA55D3"}, "58": {"v": "E9", "c": "FFBA55D3"}, "67": {"v": "E10", "c": "FFBA55D3"}, "77": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "p", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 54", "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "M3", "c": "FFF5DEB3"}, "28": {"v": "E34", "c": "FFBA55D3"}, "29": {"v": "M4", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E34", "c": "FFFFA500"}, "33": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E5", "c": "FFFFA500"}, "35": {"v": "E6", "c": "FFFFA500"}, "37": {"v": "Mission", "c": "FFDC143C"}, "38": {"v": "E6", "c": "FFBA55D3"}, "44": {"v": "E7", "c": "FFBA55D3"}, "51": {"v": "E8", "c": "FFBA55D3"}, "59": {"v": "E9", "c": "FFBA55D3"}, "68": {"v": "E10", "c": "FFBA55D3"}, "78": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "an-en-am-am", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 56", "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "M3", "c": "FFF5DEB3"}, "29": {"v": "E34", "c": "FFBA55D3"}, "30": {"v": "M4", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E34", "c": "FFFFA500"}, "34": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E5", "c": "FFFFA500"}, "36": {"v": "E6", "c": "FFFFA500"}, "38": {"v": "Mission", "c": "FFDC143C"}, "39": {"v": "E6", "c": "FFBA55D3"}, "45": {"v": "E7", "c": "FFBA55D3"}, "52": {"v": "E8", "c": "FFBA55D3"}, "60": {"v": "E9", "c": "FFBA55D3"}, "69": {"v": "E10", "c": "FFBA55D3"}, "79": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "j", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 58", "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "M3", "c": "FFF5DEB3"}, "30": {"v": "E34", "c": "FFBA55D3"}, "31": {"v": "M4", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E34", "c": "FFFFA500"}, "35": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E5", "c": "FFFFA500"}, "37": {"v": "E6", "c": "FFFFA500"}, "39": {"v": "Mission", "c": "FFDC143C"}, "40": {"v": "E6", "c": "FFBA55D3"}, "46": {"v": "E7", "c": "FFBA55D3"}, "53": {"v": "E8", "c": "FFBA55D3"}, "61": {"v": "E9", "c": "FFBA55D3"}, "70": {"v": "E10", "c": "FFBA55D3"}, "80": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "on-om", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 60", "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "M3", "c": "FFF5DEB3"}, "31": {"v": "E34", "c": "FFBA55D3"}, "32": {"v": "M4", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E34", "c": "FFFFA500"}, "36": {"v": "E6", "c": "FFBA55D3"}, "37": {"v": "E5", "c": "FFFFA500"}, "38": {"v": "E6", "c": "FFFFA500"}, "40": {"v": "Mission", "c": "FFDC143C"}, "41": {"v": "E6", "c": "FFBA55D3"}, "47": {"v": "E7", "c": "FFBA55D3"}, "54": {"v": "E8", "c": "FFBA55D3"}, "62": {"v": "E9", "c": "FFBA55D3"}, "71": {"v": "E10", "c": "FFBA55D3"}, "81": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "b", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 62", "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "M3", "c": "FFF5DEB3"}, "32": {"v": "E34", "c": "FFBA55D3"}, "33": {"v": "M4", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}, "36": {"v": "E34", "c": "FFFFA500"}, "37": {"v": "E6", "c": "FFBA55D3"}, "38": {"v": "E5", "c": "FFFFA500"}, "39": {"v": "E6", "c": "FFFFA500"}, "41": {"v": "Mission", "c": "FFDC143C"}, "42": {"v": "E6", "c": "FFBA55D3"}, "48": {"v": "E7", "c": "FFBA55D3"}, "55": {"v": "E8", "c": "FFBA55D3"}, "63": {"v": "E9", "c": "FFBA55D3"}, "72": {"v": "E10", "c": "FFBA55D3"}, "82": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "oi", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 64", "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "M3", "c": "FFF5DEB3"}, "33": {"v": "E34", "c": "FFBA55D3"}, "34": {"v": "M4", "c": "FFF5DEB3"}, "35": {"v": "E1", "c": "FFFFA500"}, "36": {"v": "E5", "c": "FFBA55D3"}, "37": {"v": "E34", "c": "FFFFA500"}, "38": {"v": "E6", "c": "FFBA55D3"}, "39": {"v": "E5", "c": "FFFFA500"}, "40": {"v": "E6", "c": "FFFFA500"}, "42": {"v": "Mission", "c": "FFDC143C"}, "43": {"v": "E6", "c": "FFBA55D3"}, "49": {"v": "E7", "c": "FFBA55D3"}, "56": {"v": "E8", "c": "FFBA55D3"}, "64": {"v": "E9", "c": "FFBA55D3"}, "73": {"v": "E10", "c": "FFBA55D3"}, "83": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "g-gu", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 66", "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "M3", "c": "FFF5DEB3"}, "34": {"v": "E34", "c": "FFBA55D3"}, "35": {"v": "M4", "c": "FFF5DEB3"}, "36": {"v": "E1", "c": "FFFFA500"}, "37": {"v": "E5", "c": "FFBA55D3"}, "38": {"v": "E34", "c": "FFFFA500"}, "39": {"v": "E6", "c": "FFBA55D3"}, "40": {"v": "E5", "c": "FFFFA500"}, "41": {"v": "E6", "c": "FFFFA500"}, "43": {"v": "Mission", "c": "FFDC143C"}, "44": {"v": "E6", "c": "FFBA55D3"}, "50": {"v": "E7", "c": "FFBA55D3"}, "57": {"v": "E8", "c": "FFBA55D3"}, "65": {"v": "E9", "c": "FFBA55D3"}, "74": {"v": "E10", "c": "FFBA55D3"}, "84": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "au-eau", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 68", "cells": {"31": {"v": "L", "c": "FF4682B4"}, "32": {"v": "M", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFBA55D3"}, "34": {"v": "M3", "c": "FFF5DEB3"}, "35": {"v": "E34", "c": "FFBA55D3"}, "36": {"v": "M4", "c": "FFF5DEB3"}, "37": {"v": "E1", "c": "FFFFA500"}, "38": {"v": "E5", "c": "FFBA55D3"}, "39": {"v": "E34", "c": "FFFFA500"}, "40": {"v": "E6", "c": "FFBA55D3"}, "41": {"v": "E5", "c": "FFFFA500"}, "42": {"v": "E6", "c": "FFFFA500"}, "44": {"v": "Mission", "c": "FFDC143C"}, "45": {"v": "E6", "c": "FFBA55D3"}, "51": {"v": "E7", "c": "FFBA55D3"}, "58": {"v": "E8", "c": "FFBA55D3"}, "66": {"v": "E9", "c": "FFBA55D3"}, "75": {"v": "E10", "c": "FFBA55D3"}, "85": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "z", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 70", "cells": {"32": {"v": "L", "c": "FF4682B4"}, "33": {"v": "M", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFBA55D3"}, "35": {"v": "M3", "c": "FFF5DEB3"}, "36": {"v": "E34", "c": "FFBA55D3"}, "37": {"v": "M4", "c": "FFF5DEB3"}, "38": {"v": "E1", "c": "FFFFA500"}, "39": {"v": "E5", "c": "FFBA55D3"}, "40": {"v": "E34", "c": "FFFFA500"}, "41": {"v": "E6", "c": "FFBA55D3"}, "42": {"v": "E5", "c": "FFFFA500"}, "43": {"v": "E6", "c": "FFFFA500"}, "45": {"v": "Mission", "c": "FFDC143C"}, "46": {"v": "E6", "c": "FFBA55D3"}, "52": {"v": "E7", "c": "FFBA55D3"}, "59": {"v": "E8", "c": "FFBA55D3"}, "67": {"v": "E9", "c": "FFBA55D3"}, "76": {"v": "E10", "c": "FFBA55D3"}, "86": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "c-ç", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 82", "cells": {"33": {"v": "L", "c": "FF4682B4"}, "34": {"v": "M", "c": "FFF5DEB3"}, "35": {"v": "E1", "c": "FFBA55D3"}, "36": {"v": "M3", "c": "FFF5DEB3"}, "37": {"v": "E34", "c": "FFBA55D3"}, "38": {"v": "M4", "c": "FFF5DEB3"}, "39": {"v": "E1", "c": "FFFFA500"}, "40": {"v": "E5", "c": "FFBA55D3"}, "41": {"v": "E34", "c": "FFFFA500"}, "42": {"v": "E6", "c": "FFBA55D3"}, "43": {"v": "E5", "c": "FFFFA500"}, "44": {"v": "E6", "c": "FFFFA500"}, "46": {"v": "Mission", "c": "FFDC143C"}, "47": {"v": "E6", "c": "FFBA55D3"}, "53": {"v": "E7", "c": "FFBA55D3"}, "60": {"v": "E8", "c": "FFBA55D3"}, "68": {"v": "E9", "c": "FFBA55D3"}, "77": {"v": "E10", "c": "FFBA55D3"}, "87": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "y=ii", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 84", "cells": {"34": {"v": "L", "c": "FF4682B4"}, "35": {"v": "M", "c": "FFF5DEB3"}, "36": {"v": "E1", "c": "FFBA55D3"}, "37": {"v": "M3", "c": "FFF5DEB3"}, "38": {"v": "E34", "c": "FFBA55D3"}, "39": {"v": "M4", "c": "FFF5DEB3"}, "40": {"v": "E1", "c": "FFFFA500"}, "41": {"v": "E5", "c": "FFBA55D3"}, "42": {"v": "E34", "c": "FFFFA500"}, "43": {"v": "E6", "c": "FFBA55D3"}, "44": {"v": "E5", "c": "FFFFA500"}, "45": {"v": "E6", "c": "FFFFA500"}, "47": {"v": "Mission", "c": "FFDC143C"}, "48": {"v": "E6", "c": "FFBA55D3"}, "54": {"v": "E7", "c": "FFBA55D3"}, "61": {"v": "E8", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFBA55D3"}, "78": {"v": "E10", "c": "FFBA55D3"}, "88": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "s=z", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 86", "cells": {"35": {"v": "L", "c": "FF4682B4"}, "36": {"v": "M", "c": "FFF5DEB3"}, "37": {"v": "E1", "c": "FFBA55D3"}, "38": {"v": "M3", "c": "FFF5DEB3"}, "39": {"v": "E34", "c": "FFBA55D3"}, "40": {"v": "M4", "c": "FFF5DEB3"}, "41": {"v": "E1", "c": "FFFFA500"}, "42": {"v": "E5", "c": "FFBA55D3"}, "43": {"v": "E34", "c": "FFFFA500"}, "44": {"v": "E6", "c": "FFBA55D3"}, "45": {"v": "E5", "c": "FFFFA500"}, "46": {"v": "E6", "c": "FFFFA500"}, "48": {"v": "Mission", "c": "FFDC143C"}, "49": {"v": "E6", "c": "FFBA55D3"}, "55": {"v": "E7", "c": "FFBA55D3"}, "62": {"v": "E8", "c": "FFBA55D3"}, "70": {"v": "E9", "c": "FFBA55D3"}, "79": {"v": "E10", "c": "FFBA55D3"}, "89": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "q-k", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 88", "cells": {"36": {"v": "L", "c": "FF4682B4"}, "37": {"v": "M", "c": "FFF5DEB3"}, "38": {"v": "E1", "c": "FFBA55D3"}, "39": {"v": "M3", "c": "FFF5DEB3"}, "40": {"v": "E34", "c": "FFBA55D3"}, "41": {"v": "M4", "c": "FFF5DEB3"}, "42": {"v": "E1", "c": "FFFFA500"}, "43": {"v": "E5", "c": "FFBA55D3"}, "44": {"v": "E34", "c": "FFFFA500"}, "45": {"v": "E6", "c": "FFBA55D3"}, "46": {"v": "E5", "c": "FFFFA500"}, "47": {"v": "E6", "c": "FFFFA500"}, "49": {"v": "Mission", "c": "FFDC143C"}, "50": {"v": "E6", "c": "FFBA55D3"}, "56": {"v": "E7", "c": "FFBA55D3"}, "63": {"v": "E8", "c": "FFBA55D3"}, "71": {"v": "E9", "c": "FFBA55D3"}, "80": {"v": "E10", "c": "FFBA55D3"}, "90": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "br-cr-dr-dr-tr-vr- bl-cl-fl-gl-pl", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 90", "cells": {"37": {"v": "L", "c": "FF4682B4"}, "38": {"v": "M", "c": "FFF5DEB3"}, "39": {"v": "E1", "c": "FFBA55D3"}, "40": {"v": "M3", "c": "FFF5DEB3"}, "41": {"v": "E34", "c": "FFBA55D3"}, "42": {"v": "M4", "c": "FFF5DEB3"}, "43": {"v": "E1", "c": "FFFFA500"}, "44": {"v": "E5", "c": "FFBA55D3"}, "45": {"v": "E34", "c": "FFFFA500"}, "46": {"v": "E6", "c": "FFBA55D3"}, "47": {"v": "E5", "c": "FFFFA500"}, "48": {"v": "E6", "c": "FFFFA500"}, "50": {"v": "Mission", "c": "FFDC143C"}, "51": {"v": "E6", "c": "FFBA55D3"}, "57": {"v": "E7", "c": "FFBA55D3"}, "64": {"v": "E8", "c": "FFBA55D3"}, "72": {"v": "E9", "c": "FFBA55D3"}, "81": {"v": "E10", "c": "FFBA55D3"}, "91": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "bl-cl-fl-gl-pl", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 92", "cells": {"38": {"v": "L", "c": "FF4682B4"}, "39": {"v": "M", "c": "FFF5DEB3"}, "40": {"v": "E1", "c": "FFBA55D3"}, "41": {"v": "M3", "c": "FFF5DEB3"}, "42": {"v": "E34", "c": "FFBA55D3"}, "43": {"v": "M4", "c": "FFF5DEB3"}, "44": {"v": "E1", "c": "FFFFA500"}, "45": {"v": "E5", "c": "FFBA55D3"}, "46": {"v": "E34", "c": "FFFFA500"}, "47": {"v": "E6", "c": "FFBA55D3"}, "48": {"v": "E5", "c": "FFFFA500"}, "49": {"v": "E6", "c": "FFFFA500"}, "51": {"v": "Mission", "c": "FFDC143C"}, "52": {"v": "E6", "c": "FFBA55D3"}, "58": {"v": "E7", "c": "FFBA55D3"}, "65": {"v": "E8", "c": "FFBA55D3"}, "73": {"v": "E9", "c": "FFBA55D3"}, "82": {"v": "E10", "c": "FFBA55D3"}, "92": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "g-ge", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 94", "cells": {"39": {"v": "L", "c": "FF4682B4"}, "40": {"v": "M", "c": "FFF5DEB3"}, "41": {"v": "E1", "c": "FFBA55D3"}, "42": {"v": "M3", "c": "FFF5DEB3"}, "43": {"v": "E34", "c": "FFBA55D3"}, "44": {"v": "M4", "c": "FFF5DEB3"}, "45": {"v": "E1", "c": "FFFFA500"}, "46": {"v": "E5", "c": "FFBA55D3"}, "47": {"v": "E34", "c": "FFFFA500"}, "48": {"v": "E6", "c": "FFBA55D3"}, "49": {"v": "E5", "c": "FFFFA500"}, "50": {"v": "E6", "c": "FFFFA500"}, "52": {"v": "Mission", "c": "FFDC143C"}, "53": {"v": "E6", "c": "FFBA55D3"}, "59": {"v": "E7", "c": "FFBA55D3"}, "66": {"v": "E8", "c": "FFBA55D3"}, "74": {"v": "E9", "c": "FFBA55D3"}, "83": {"v": "E10", "c": "FFBA55D3"}, "93": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ai-ei", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 96", "cells": {"40": {"v": "L", "c": "FF4682B4"}, "41": {"v": "M", "c": "FFF5DEB3"}, "42": {"v": "E1", "c": "FFBA55D3"}, "43": {"v": "M3", "c": "FFF5DEB3"}, "44": {"v": "E34", "c": "FFBA55D3"}, "45": {"v": "M4", "c": "FFF5DEB3"}, "46": {"v": "E1", "c": "FFFFA500"}, "47": {"v": "E5", "c": "FFBA55D3"}, "48": {"v": "E34", "c": "FFFFA500"}, "49": {"v": "E6", "c": "FFBA55D3"}, "50": {"v": "E5", "c": "FFFFA500"}, "51": {"v": "E6", "c": "FFFFA500"}, "53": {"v": "Mission", "c": "FFDC143C"}, "54": {"v": "E6", "c": "FFBA55D3"}, "60": {"v": "E7", "c": "FFBA55D3"}, "67": {"v": "E8", "c": "FFBA55D3"}, "75": {"v": "E9", "c": "FFBA55D3"}, "84": {"v": "E10", "c": "FFBA55D3"}, "94": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ph", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 98", "cells": {"41": {"v": "L", "c": "FF4682B4"}, "42": {"v": "M", "c": "FFF5DEB3"}, "43": {"v": "E1", "c": "FFBA55D3"}, "44": {"v": "M3", "c": "FFF5DEB3"}, "45": {"v": "E34", "c": "FFBA55D3"}, "46": {"v": "M4", "c": "FFF5DEB3"}, "47": {"v": "E1", "c": "FFFFA500"}, "48": {"v": "E5", "c": "FFBA55D3"}, "49": {"v": "E34", "c": "FFFFA500"}, "50": {"v": "E6", "c": "FFBA55D3"}, "51": {"v": "E5", "c": "FFFFA500"}, "52": {"v": "E6", "c": "FFFFA500"}, "54": {"v": "Mission", "c": "FFDC143C"}, "55": {"v": "E6", "c": "FFBA55D3"}, "61": {"v": "E7", "c": "FFBA55D3"}, "68": {"v": "E8", "c": "FFBA55D3"}, "76": {"v": "E9", "c": "FFBA55D3"}, "85": {"v": "E10", "c": "FFBA55D3"}, "95": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "gn", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 100", "cells": {"42": {"v": "L", "c": "FF4682B4"}, "43": {"v": "M", "c": "FFF5DEB3"}, "44": {"v": "E1", "c": "FFBA55D3"}, "45": {"v": "M3", "c": "FFF5DEB3"}, "46": {"v": "E34", "c": "FFBA55D3"}, "47": {"v": "M4", "c": "FFF5DEB3"}, "48": {"v": "E1", "c": "FFFFA500"}, "49": {"v": "E5", "c": "FFBA55D3"}, "50": {"v": "E34", "c": "FFFFA500"}, "51": {"v": "E6", "c": "FFBA55D3"}, "52": {"v": "E5", "c": "FFFFA500"}, "53": {"v": "E6", "c": "FFFFA500"}, "55": {"v": "Mission", "c": "FFDC143C"}, "56": {"v": "E6", "c": "FFBA55D3"}, "62": {"v": "E7", "c": "FFBA55D3"}, "69": {"v": "E8", "c": "FFBA55D3"}, "77": {"v": "E9", "c": "FFBA55D3"}, "86": {"v": "E10", "c": "FFBA55D3"}, "96": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "in-im", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 102", "cells": {"43": {"v": "L", "c": "FF4682B4"}, "44": {"v": "M", "c": "FFF5DEB3"}, "45": {"v": "E1", "c": "FFBA55D3"}, "46": {"v": "M3", "c": "FFF5DEB3"}, "47": {"v": "E34", "c": "FFBA55D3"}, "48": {"v": "M4", "c": "FFF5DEB3"}, "49": {"v": "E1", "c": "FFFFA500"}, "50": {"v": "E5", "c": "FFBA55D3"}, "51": {"v": "E34", "c": "FFFFA500"}, "52": {"v": "E6", "c": "FFBA55D3"}, "53": {"v": "E5", "c": "FFFFA500"}, "54": {"v": "E6", "c": "FFFFA500"}, "56": {"v": "Mission", "c": "FFDC143C"}, "57": {"v": "E6", "c": "FFBA55D3"}, "63": {"v": "E7", "c": "FFBA55D3"}, "70": {"v": "E8", "c": "FFBA55D3"}, "78": {"v": "E9", "c": "FFBA55D3"}, "87": {"v": "E10", "c": "FFBA55D3"}, "97": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ett-ell-err-enn...", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 104", "cells": {"44": {"v": "L", "c": "FF4682B4"}, "45": {"v": "M", "c": "FFF5DEB3"}, "46": {"v": "E1", "c": "FFBA55D3"}, "47": {"v": "M3", "c": "FFF5DEB3"}, "48": {"v": "E34", "c": "FFBA55D3"}, "49": {"v": "M4", "c": "FFF5DEB3"}, "50": {"v": "E1", "c": "FFFFA500"}, "51": {"v": "E5", "c": "FFBA55D3"}, "52": {"v": "E34", "c": "FFFFA500"}, "53": {"v": "E6", "c": "FFBA55D3"}, "54": {"v": "E5", "c": "FFFFA500"}, "55": {"v": "E6", "c": "FFFFA500"}, "57": {"v": "Mission", "c": "FFDC143C"}, "58": {"v": "E6", "c": "FFBA55D3"}, "64": {"v": "E7", "c": "FFBA55D3"}, "71": {"v": "E8", "c": "FFBA55D3"}, "79": {"v": "E9", "c": "FFBA55D3"}, "88": {"v": "E10", "c": "FFBA55D3"}, "98": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "es-ec-el-er...", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 106", "cells": {"45": {"v": "L", "c": "FF4682B4"}, "46": {"v": "M", "c": "FFF5DEB3"}, "47": {"v": "E1", "c": "FFBA55D3"}, "48": {"v": "M3", "c": "FFF5DEB3"}, "49": {"v": "E34", "c": "FFBA55D3"}, "50": {"v": "M4", "c": "FFF5DEB3"}, "51": {"v": "E1", "c": "FFFFA500"}, "52": {"v": "E5", "c": "FFBA55D3"}, "53": {"v": "E34", "c": "FFFFA500"}, "54": {"v": "E6", "c": "FFBA55D3"}, "55": {"v": "E5", "c": "FFFFA500"}, "56": {"v": "E6", "c": "FFFFA500"}, "58": {"v": "Mission", "c": "FFDC143C"}, "59": {"v": "E6", "c": "FFBA55D3"}, "65": {"v": "E7", "c": "FFBA55D3"}, "72": {"v": "E8", "c": "FFBA55D3"}, "80": {"v": "E9", "c": "FFBA55D3"}, "89": {"v": "E10", "c": "FFBA55D3"}, "99": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "er-ez-ed", "domain": "Identifier les mots de manière de plus en plus aisée", "link": null, "extra": "page 108", "cells": {"46": {"v": "L", "c": "FF4682B4"}, "47": {"v": "M", "c": "FFF5DEB3"}, "48": {"v": "E1", "c": "FFBA55D3"}, "49": {"v": "M3", "c": "FFF5DEB3"}, "50": {"v": "E34", "c": "FFBA55D3"}, "51": {"v": "M4", "c": "FFF5DEB3"}, "52": {"v": "E1", "c": "FFFFA500"}, "53": {"v": "E5", "c": "FFBA55D3"}, "54": {"v": "E34", "c": "FFFFA500"}, "55": {"v": "E6", "c": "FFBA55D3"}, "56": {"v": "E5", "c": "FFFFA500"}, "57": {"v": "E6", "c": "FFFFA500"}, "59": {"v": "Mission", "c": "FFDC143C"}, "60": {"v": "E6", "c": "FFBA55D3"}, "66": {"v": "E7", "c": "FFBA55D3"}, "73": {"v": "E8", "c": "FFBA55D3"}, "81": {"v": "E9", "c": "FFBA55D3"}, "90": {"v": "E10", "c": "FFBA55D3"}, "100": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "eu-oeu", "domain": "Lire à voix haute", "link": null, "extra": "page 122", "cells": {"47": {"v": "L", "c": "FF4682B4"}, "48": {"v": "M", "c": "FFF5DEB3"}, "49": {"v": "E1", "c": "FFBA55D3"}, "50": {"v": "M3", "c": "FFF5DEB3"}, "51": {"v": "E34", "c": "FFBA55D3"}, "52": {"v": "M4", "c": "FFF5DEB3"}, "53": {"v": "E1", "c": "FFFFA500"}, "54": {"v": "E5", "c": "FFBA55D3"}, "55": {"v": "E34", "c": "FFFFA500"}, "56": {"v": "E6", "c": "FFBA55D3"}, "57": {"v": "E5", "c": "FFFFA500"}, "58": {"v": "E6", "c": "FFFFA500"}, "60": {"v": "Mission", "c": "FFDC143C"}, "61": {"v": "E6", "c": "FFBA55D3"}, "67": {"v": "E7", "c": "FFBA55D3"}, "74": {"v": "E8", "c": "FFBA55D3"}, "82": {"v": "E9", "c": "FFBA55D3"}, "91": {"v": "E10", "c": "FFBA55D3"}, "101": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "x", "domain": "Lire à voix haute", "link": null, "extra": "page 124", "cells": {"48": {"v": "L", "c": "FF4682B4"}, "49": {"v": "M", "c": "FFF5DEB3"}, "50": {"v": "E1", "c": "FFBA55D3"}, "51": {"v": "M3", "c": "FFF5DEB3"}, "52": {"v": "E34", "c": "FFBA55D3"}, "53": {"v": "M4", "c": "FFF5DEB3"}, "54": {"v": "E1", "c": "FFFFA500"}, "55": {"v": "E5", "c": "FFBA55D3"}, "56": {"v": "E34", "c": "FFFFA500"}, "57": {"v": "E6", "c": "FFBA55D3"}, "58": {"v": "E5", "c": "FFFFA500"}, "59": {"v": "E6", "c": "FFFFA500"}, "61": {"v": "Mission", "c": "FFDC143C"}, "62": {"v": "E6", "c": "FFBA55D3"}, "68": {"v": "E7", "c": "FFBA55D3"}, "75": {"v": "E8", "c": "FFBA55D3"}, "83": {"v": "E9", "c": "FFBA55D3"}, "92": {"v": "E10", "c": "FFBA55D3"}, "102": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "w", "domain": "Lire à voix haute", "link": null, "extra": "page 126", "cells": {"49": {"v": "L", "c": "FF4682B4"}, "50": {"v": "M", "c": "FFF5DEB3"}, "51": {"v": "E1", "c": "FFBA55D3"}, "52": {"v": "M3", "c": "FFF5DEB3"}, "53": {"v": "E34", "c": "FFBA55D3"}, "54": {"v": "M4", "c": "FFF5DEB3"}, "55": {"v": "E1", "c": "FFFFA500"}, "56": {"v": "E5", "c": "FFBA55D3"}, "57": {"v": "E34", "c": "FFFFA500"}, "58": {"v": "E6", "c": "FFBA55D3"}, "59": {"v": "E5", "c": "FFFFA500"}, "60": {"v": "E6", "c": "FFFFA500"}, "62": {"v": "Mission", "c": "FFDC143C"}, "63": {"v": "E6", "c": "FFBA55D3"}, "69": {"v": "E7", "c": "FFBA55D3"}, "76": {"v": "E8", "c": "FFBA55D3"}, "84": {"v": "E9", "c": "FFBA55D3"}, "93": {"v": "E10", "c": "FFBA55D3"}, "103": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "oin", "domain": "Lire à voix haute", "link": null, "extra": "page 128", "cells": {"50": {"v": "L", "c": "FF4682B4"}, "51": {"v": "M", "c": "FFF5DEB3"}, "52": {"v": "E1", "c": "FFBA55D3"}, "53": {"v": "M3", "c": "FFF5DEB3"}, "54": {"v": "E34", "c": "FFBA55D3"}, "55": {"v": "M4", "c": "FFF5DEB3"}, "56": {"v": "E1", "c": "FFFFA500"}, "57": {"v": "E5", "c": "FFBA55D3"}, "58": {"v": "E34", "c": "FFFFA500"}, "59": {"v": "E6", "c": "FFBA55D3"}, "60": {"v": "E5", "c": "FFFFA500"}, "61": {"v": "E6", "c": "FFFFA500"}, "63": {"v": "Mission", "c": "FFDC143C"}, "64": {"v": "E6", "c": "FFBA55D3"}, "70": {"v": "E7", "c": "FFBA55D3"}, "77": {"v": "E8", "c": "FFBA55D3"}, "85": {"v": "E9", "c": "FFBA55D3"}, "94": {"v": "E10", "c": "FFBA55D3"}, "104": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ain-aim-ein", "domain": "Lire à voix haute", "link": null, "extra": "page 130", "cells": {"51": {"v": "L", "c": "FF4682B4"}, "52": {"v": "M", "c": "FFF5DEB3"}, "53": {"v": "E1", "c": "FFBA55D3"}, "54": {"v": "M3", "c": "FFF5DEB3"}, "55": {"v": "E34", "c": "FFBA55D3"}, "56": {"v": "M4", "c": "FFF5DEB3"}, "57": {"v": "E1", "c": "FFFFA500"}, "58": {"v": "E5", "c": "FFBA55D3"}, "59": {"v": "E34", "c": "FFFFA500"}, "60": {"v": "E6", "c": "FFBA55D3"}, "61": {"v": "E5", "c": "FFFFA500"}, "62": {"v": "E6", "c": "FFFFA500"}, "64": {"v": "Mission", "c": "FFDC143C"}, "65": {"v": "E6", "c": "FFBA55D3"}, "71": {"v": "E7", "c": "FFBA55D3"}, "78": {"v": "E8", "c": "FFBA55D3"}, "86": {"v": "E9", "c": "FFBA55D3"}, "95": {"v": "E10", "c": "FFBA55D3"}, "105": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ill", "domain": "Lire à voix haute", "link": null, "extra": "page 132", "cells": {"52": {"v": "L", "c": "FF4682B4"}, "53": {"v": "M", "c": "FFF5DEB3"}, "54": {"v": "E1", "c": "FFBA55D3"}, "55": {"v": "M3", "c": "FFF5DEB3"}, "56": {"v": "E34", "c": "FFBA55D3"}, "57": {"v": "M4", "c": "FFF5DEB3"}, "58": {"v": "E1", "c": "FFFFA500"}, "59": {"v": "E5", "c": "FFBA55D3"}, "60": {"v": "E34", "c": "FFFFA500"}, "61": {"v": "E6", "c": "FFBA55D3"}, "62": {"v": "E5", "c": "FFFFA500"}, "63": {"v": "E6", "c": "FFFFA500"}, "65": {"v": "Mission", "c": "FFDC143C"}, "66": {"v": "E6", "c": "FFBA55D3"}, "72": {"v": "E7", "c": "FFBA55D3"}, "79": {"v": "E8", "c": "FFBA55D3"}, "87": {"v": "E9", "c": "FFBA55D3"}, "96": {"v": "E10", "c": "FFBA55D3"}, "106": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ien", "domain": "Lire à voix haute", "link": null, "extra": "page 134", "cells": {"53": {"v": "L", "c": "FF4682B4"}, "54": {"v": "M", "c": "FFF5DEB3"}, "55": {"v": "E1", "c": "FFBA55D3"}, "56": {"v": "M3", "c": "FFF5DEB3"}, "57": {"v": "E34", "c": "FFBA55D3"}, "58": {"v": "M4", "c": "FFF5DEB3"}, "59": {"v": "E1", "c": "FFFFA500"}, "60": {"v": "E5", "c": "FFBA55D3"}, "61": {"v": "E34", "c": "FFFFA500"}, "62": {"v": "E6", "c": "FFBA55D3"}, "63": {"v": "E5", "c": "FFFFA500"}, "64": {"v": "E6", "c": "FFFFA500"}, "66": {"v": "Mission", "c": "FFDC143C"}, "67": {"v": "E6", "c": "FFBA55D3"}, "73": {"v": "E7", "c": "FFBA55D3"}, "80": {"v": "E8", "c": "FFBA55D3"}, "88": {"v": "E9", "c": "FFBA55D3"}, "97": {"v": "E10", "c": "FFBA55D3"}, "107": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "tion-ti", "domain": "Lire à voix haute", "link": null, "extra": "page 136", "cells": {"54": {"v": "L", "c": "FF4682B4"}, "55": {"v": "M", "c": "FFF5DEB3"}, "56": {"v": "E1", "c": "FFBA55D3"}, "57": {"v": "M3", "c": "FFF5DEB3"}, "58": {"v": "E34", "c": "FFBA55D3"}, "59": {"v": "M4", "c": "FFF5DEB3"}, "60": {"v": "E1", "c": "FFFFA500"}, "61": {"v": "E5", "c": "FFBA55D3"}, "62": {"v": "E34", "c": "FFFFA500"}, "63": {"v": "E6", "c": "FFBA55D3"}, "64": {"v": "E5", "c": "FFFFA500"}, "65": {"v": "E6", "c": "FFFFA500"}, "67": {"v": "Mission", "c": "FFDC143C"}, "68": {"v": "E6", "c": "FFBA55D3"}, "74": {"v": "E7", "c": "FFBA55D3"}, "81": {"v": "E8", "c": "FFBA55D3"}, "89": {"v": "E9", "c": "FFBA55D3"}, "98": {"v": "E10", "c": "FFBA55D3"}, "108": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ouil/ouill eil/eill ", "domain": "Lire à voix haute", "link": null, "extra": "page 138", "cells": {"55": {"v": "L", "c": "FF4682B4"}, "56": {"v": "M", "c": "FFF5DEB3"}, "57": {"v": "E1", "c": "FFBA55D3"}, "58": {"v": "M3", "c": "FFF5DEB3"}, "59": {"v": "E34", "c": "FFBA55D3"}, "60": {"v": "M4", "c": "FFF5DEB3"}, "61": {"v": "E1", "c": "FFFFA500"}, "62": {"v": "E5", "c": "FFBA55D3"}, "63": {"v": "E34", "c": "FFFFA500"}, "64": {"v": "E6", "c": "FFBA55D3"}, "65": {"v": "E5", "c": "FFFFA500"}, "66": {"v": "E6", "c": "FFFFA500"}, "68": {"v": "Mission", "c": "FFDC143C"}, "69": {"v": "E6", "c": "FFBA55D3"}, "75": {"v": "E7", "c": "FFBA55D3"}, "82": {"v": "E8", "c": "FFBA55D3"}, "90": {"v": "E9", "c": "FFBA55D3"}, "99": {"v": "E10", "c": "FFBA55D3"}, "109": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ail/aill", "domain": "Lire à voix haute", "link": null, "extra": "page 140", "cells": {"56": {"v": "L", "c": "FF4682B4"}, "57": {"v": "M", "c": "FFF5DEB3"}, "58": {"v": "E1", "c": "FFBA55D3"}, "59": {"v": "M3", "c": "FFF5DEB3"}, "60": {"v": "E34", "c": "FFBA55D3"}, "61": {"v": "M4", "c": "FFF5DEB3"}, "62": {"v": "E1", "c": "FFFFA500"}, "63": {"v": "E5", "c": "FFBA55D3"}, "64": {"v": "E34", "c": "FFFFA500"}, "65": {"v": "E6", "c": "FFBA55D3"}, "66": {"v": "E5", "c": "FFFFA500"}, "67": {"v": "E6", "c": "FFFFA500"}, "69": {"v": "Mission", "c": "FFDC143C"}, "70": {"v": "E6", "c": "FFBA55D3"}, "76": {"v": "E7", "c": "FFBA55D3"}, "83": {"v": "E8", "c": "FFBA55D3"}, "91": {"v": "E9", "c": "FFBA55D3"}, "100": {"v": "E10", "c": "FFBA55D3"}, "110": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "euil/euill", "domain": "Lire à voix haute", "link": null, "extra": "page 142", "cells": {"57": {"v": "L", "c": "FF4682B4"}, "58": {"v": "M", "c": "FFF5DEB3"}, "59": {"v": "E1", "c": "FFBA55D3"}, "60": {"v": "M3", "c": "FFF5DEB3"}, "61": {"v": "E34", "c": "FFBA55D3"}, "62": {"v": "M4", "c": "FFF5DEB3"}, "63": {"v": "E1", "c": "FFFFA500"}, "64": {"v": "E5", "c": "FFBA55D3"}, "65": {"v": "E34", "c": "FFFFA500"}, "66": {"v": "E6", "c": "FFBA55D3"}, "67": {"v": "E5", "c": "FFFFA500"}, "68": {"v": "E6", "c": "FFFFA500"}, "70": {"v": "Mission", "c": "FFDC143C"}, "71": {"v": "E6", "c": "FFBA55D3"}, "77": {"v": "E7", "c": "FFBA55D3"}, "84": {"v": "E8", "c": "FFBA55D3"}, "92": {"v": "E9", "c": "FFBA55D3"}, "101": {"v": "E10", "c": "FFBA55D3"}, "111": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "y=ii", "domain": "Lire à voix haute", "link": null, "extra": "page 144", "cells": {"58": {"v": "L", "c": "FF4682B4"}, "59": {"v": "M", "c": "FFF5DEB3"}, "60": {"v": "E1", "c": "FFBA55D3"}, "61": {"v": "M3", "c": "FFF5DEB3"}, "62": {"v": "E34", "c": "FFBA55D3"}, "63": {"v": "M4", "c": "FFF5DEB3"}, "64": {"v": "E1", "c": "FFFFA500"}, "65": {"v": "E5", "c": "FFBA55D3"}, "66": {"v": "E34", "c": "FFFFA500"}, "67": {"v": "E6", "c": "FFBA55D3"}, "68": {"v": "E5", "c": "FFFFA500"}, "69": {"v": "E6", "c": "FFFFA500"}, "71": {"v": "Mission", "c": "FFDC143C"}, "72": {"v": "E6", "c": "FFBA55D3"}, "78": {"v": "E7", "c": "FFBA55D3"}, "85": {"v": "E8", "c": "FFBA55D3"}, "93": {"v": "E9", "c": "FFBA55D3"}, "102": {"v": "E10", "c": "FFBA55D3"}, "112": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "Les lettres muettes", "domain": "Lire à voix haute", "link": null, "extra": "page 146", "cells": {"59": {"v": "L", "c": "FF4682B4"}, "60": {"v": "M", "c": "FFF5DEB3"}, "61": {"v": "E1", "c": "FFBA55D3"}, "62": {"v": "M3", "c": "FFF5DEB3"}, "63": {"v": "E34", "c": "FFBA55D3"}, "64": {"v": "M4", "c": "FFF5DEB3"}, "65": {"v": "E1", "c": "FFFFA500"}, "66": {"v": "E5", "c": "FFBA55D3"}, "67": {"v": "E34", "c": "FFFFA500"}, "68": {"v": "E6", "c": "FFBA55D3"}, "69": {"v": "E5", "c": "FFFFA500"}, "70": {"v": "E6", "c": "FFFFA500"}, "72": {"v": "Mission", "c": "FFDC143C"}, "73": {"v": "E6", "c": "FFBA55D3"}, "79": {"v": "E7", "c": "FFBA55D3"}, "86": {"v": "E8", "c": "FFBA55D3"}, "94": {"v": "E9", "c": "FFBA55D3"}, "103": {"v": "E10", "c": "FFBA55D3"}, "113": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "enn-emm", "domain": "Lire à voix haute", "link": null, "extra": "page 156", "cells": {"60": {"v": "L", "c": "FF4682B4"}, "61": {"v": "M", "c": "FFF5DEB3"}, "62": {"v": "E1", "c": "FFBA55D3"}, "63": {"v": "M3", "c": "FFF5DEB3"}, "64": {"v": "E34", "c": "FFBA55D3"}, "65": {"v": "M4", "c": "FFF5DEB3"}, "66": {"v": "E1", "c": "FFFFA500"}, "67": {"v": "E5", "c": "FFBA55D3"}, "68": {"v": "E34", "c": "FFFFA500"}, "69": {"v": "E6", "c": "FFBA55D3"}, "70": {"v": "E5", "c": "FFFFA500"}, "71": {"v": "E6", "c": "FFFFA500"}, "73": {"v": "Mission", "c": "FFDC143C"}, "74": {"v": "E6", "c": "FFBA55D3"}, "80": {"v": "E7", "c": "FFBA55D3"}, "87": {"v": "E8", "c": "FFBA55D3"}, "95": {"v": "E9", "c": "FFBA55D3"}, "104": {"v": "E10", "c": "FFBA55D3"}, "114": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "c-ç", "domain": "Lire à voix haute", "link": null, "extra": "page 158", "cells": {"61": {"v": "L", "c": "FF4682B4"}, "62": {"v": "M", "c": "FFF5DEB3"}, "63": {"v": "E1", "c": "FFBA55D3"}, "64": {"v": "M3", "c": "FFF5DEB3"}, "65": {"v": "E34", "c": "FFBA55D3"}, "66": {"v": "M4", "c": "FFF5DEB3"}, "67": {"v": "E1", "c": "FFFFA500"}, "68": {"v": "E5", "c": "FFBA55D3"}, "69": {"v": "E34", "c": "FFFFA500"}, "70": {"v": "E6", "c": "FFBA55D3"}, "71": {"v": "E5", "c": "FFFFA500"}, "72": {"v": "E6", "c": "FFFFA500"}, "74": {"v": "Mission", "c": "FFDC143C"}, "75": {"v": "E6", "c": "FFBA55D3"}, "81": {"v": "E7", "c": "FFBA55D3"}, "88": {"v": "E8", "c": "FFBA55D3"}, "96": {"v": "E9", "c": "FFBA55D3"}, "105": {"v": "E10", "c": "FFBA55D3"}, "115": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "er-et", "domain": "Lire à voix haute", "link": null, "extra": "page 160", "cells": {"62": {"v": "L", "c": "FF4682B4"}, "63": {"v": "M", "c": "FFF5DEB3"}, "64": {"v": "E1", "c": "FFBA55D3"}, "65": {"v": "M3", "c": "FFF5DEB3"}, "66": {"v": "E34", "c": "FFBA55D3"}, "67": {"v": "M4", "c": "FFF5DEB3"}, "68": {"v": "E1", "c": "FFFFA500"}, "69": {"v": "E5", "c": "FFBA55D3"}, "70": {"v": "E34", "c": "FFFFA500"}, "71": {"v": "E6", "c": "FFBA55D3"}, "72": {"v": "E5", "c": "FFFFA500"}, "73": {"v": "E6", "c": "FFFFA500"}, "75": {"v": "Mission", "c": "FFDC143C"}, "76": {"v": "E6", "c": "FFBA55D3"}, "82": {"v": "E7", "c": "FFBA55D3"}, "89": {"v": "E8", "c": "FFBA55D3"}, "97": {"v": "E9", "c": "FFBA55D3"}, "106": {"v": "E10", "c": "FFBA55D3"}, "116": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "on-om;on-onn", "domain": "Lire à voix haute", "link": null, "extra": "page 162", "cells": {"63": {"v": "L", "c": "FF4682B4"}, "64": {"v": "M", "c": "FFF5DEB3"}, "65": {"v": "E1", "c": "FFBA55D3"}, "66": {"v": "M3", "c": "FFF5DEB3"}, "67": {"v": "E34", "c": "FFBA55D3"}, "68": {"v": "M4", "c": "FFF5DEB3"}, "69": {"v": "E1", "c": "FFFFA500"}, "70": {"v": "E5", "c": "FFBA55D3"}, "71": {"v": "E34", "c": "FFFFA500"}, "72": {"v": "E6", "c": "FFBA55D3"}, "73": {"v": "E5", "c": "FFFFA500"}, "74": {"v": "E6", "c": "FFFFA500"}, "76": {"v": "Mission", "c": "FFDC143C"}, "77": {"v": "E6", "c": "FFBA55D3"}, "83": {"v": "E7", "c": "FFBA55D3"}, "90": {"v": "E8", "c": "FFBA55D3"}, "98": {"v": "E9", "c": "FFBA55D3"}, "107": {"v": "E10", "c": "FFBA55D3"}, "117": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ch", "domain": "Lire à voix haute", "link": null, "extra": "page 164", "cells": {"64": {"v": "L", "c": "FF4682B4"}, "65": {"v": "M", "c": "FFF5DEB3"}, "66": {"v": "E1", "c": "FFBA55D3"}, "67": {"v": "M3", "c": "FFF5DEB3"}, "68": {"v": "E34", "c": "FFBA55D3"}, "69": {"v": "M4", "c": "FFF5DEB3"}, "70": {"v": "E1", "c": "FFFFA500"}, "71": {"v": "E5", "c": "FFBA55D3"}, "72": {"v": "E34", "c": "FFFFA500"}, "73": {"v": "E6", "c": "FFBA55D3"}, "74": {"v": "E5", "c": "FFFFA500"}, "75": {"v": "E6", "c": "FFFFA500"}, "77": {"v": "Mission", "c": "FFDC143C"}, "78": {"v": "E6", "c": "FFBA55D3"}, "84": {"v": "E7", "c": "FFBA55D3"}, "91": {"v": "E8", "c": "FFBA55D3"}, "99": {"v": "E9", "c": "FFBA55D3"}, "108": {"v": "E10", "c": "FFBA55D3"}, "118": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "an,am;ann,amm", "domain": "Lire à voix haute", "link": null, "extra": "page 166", "cells": {"65": {"v": "L", "c": "FF4682B4"}, "66": {"v": "M", "c": "FFF5DEB3"}, "67": {"v": "E1", "c": "FFBA55D3"}, "68": {"v": "M3", "c": "FFF5DEB3"}, "69": {"v": "E34", "c": "FFBA55D3"}, "70": {"v": "M4", "c": "FFF5DEB3"}, "71": {"v": "E1", "c": "FFFFA500"}, "72": {"v": "E5", "c": "FFBA55D3"}, "73": {"v": "E34", "c": "FFFFA500"}, "74": {"v": "E6", "c": "FFBA55D3"}, "75": {"v": "E5", "c": "FFFFA500"}, "76": {"v": "E6", "c": "FFFFA500"}, "78": {"v": "Mission", "c": "FFDC143C"}, "79": {"v": "E6", "c": "FFBA55D3"}, "85": {"v": "E7", "c": "FFBA55D3"}, "92": {"v": "E8", "c": "FFBA55D3"}, "100": {"v": "E9", "c": "FFBA55D3"}, "109": {"v": "E10", "c": "FFBA55D3"}, "119": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "sc", "domain": "Lire à voix haute", "link": null, "extra": "page 168", "cells": {"66": {"v": "L", "c": "FF4682B4"}, "67": {"v": "M", "c": "FFF5DEB3"}, "68": {"v": "E1", "c": "FFBA55D3"}, "69": {"v": "M3", "c": "FFF5DEB3"}, "70": {"v": "E34", "c": "FFBA55D3"}, "71": {"v": "M4", "c": "FFF5DEB3"}, "72": {"v": "E1", "c": "FFFFA500"}, "73": {"v": "E5", "c": "FFBA55D3"}, "74": {"v": "E34", "c": "FFFFA500"}, "75": {"v": "E6", "c": "FFBA55D3"}, "76": {"v": "E5", "c": "FFFFA500"}, "77": {"v": "E6", "c": "FFFFA500"}, "79": {"v": "Mission", "c": "FFDC143C"}, "80": {"v": "E6", "c": "FFBA55D3"}, "86": {"v": "E7", "c": "FFBA55D3"}, "93": {"v": "E8", "c": "FFBA55D3"}, "101": {"v": "E9", "c": "FFBA55D3"}, "110": {"v": "E10", "c": "FFBA55D3"}, "120": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ss", "domain": "Lire à voix haute", "link": null, "extra": "page 170", "cells": {"67": {"v": "L", "c": "FF4682B4"}, "68": {"v": "M", "c": "FFF5DEB3"}, "69": {"v": "E1", "c": "FFBA55D3"}, "70": {"v": "M3", "c": "FFF5DEB3"}, "71": {"v": "E34", "c": "FFBA55D3"}, "72": {"v": "M4", "c": "FFF5DEB3"}, "73": {"v": "E1", "c": "FFFFA500"}, "74": {"v": "E5", "c": "FFBA55D3"}, "75": {"v": "E34", "c": "FFFFA500"}, "76": {"v": "E6", "c": "FFBA55D3"}, "77": {"v": "E5", "c": "FFFFA500"}, "78": {"v": "E6", "c": "FFFFA500"}, "80": {"v": "Mission", "c": "FFDC143C"}, "81": {"v": "E6", "c": "FFBA55D3"}, "87": {"v": "E7", "c": "FFBA55D3"}, "94": {"v": "E8", "c": "FFBA55D3"}, "102": {"v": "E9", "c": "FFBA55D3"}, "111": {"v": "E10", "c": "FFBA55D3"}, "121": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ian ain ien ein ion oin", "domain": "Lire à voix haute", "link": null, "extra": "page 172", "cells": {"68": {"v": "L", "c": "FF4682B4"}, "69": {"v": "M", "c": "FFF5DEB3"}, "70": {"v": "E1", "c": "FFBA55D3"}, "71": {"v": "M3", "c": "FFF5DEB3"}, "72": {"v": "E34", "c": "FFBA55D3"}, "73": {"v": "M4", "c": "FFF5DEB3"}, "74": {"v": "E1", "c": "FFFFA500"}, "75": {"v": "E5", "c": "FFBA55D3"}, "76": {"v": "E34", "c": "FFFFA500"}, "77": {"v": "E6", "c": "FFBA55D3"}, "78": {"v": "E5", "c": "FFFFA500"}, "79": {"v": "E6", "c": "FFFFA500"}, "81": {"v": "Mission", "c": "FFDC143C"}, "82": {"v": "E6", "c": "FFBA55D3"}, "88": {"v": "E7", "c": "FFBA55D3"}, "95": {"v": "E8", "c": "FFBA55D3"}, "103": {"v": "E9", "c": "FFBA55D3"}, "112": {"v": "E10", "c": "FFBA55D3"}, "122": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "ail eil euil ouil", "domain": "Lire à voix haute", "link": null, "extra": "page 174", "cells": {"69": {"v": "L", "c": "FF4682B4"}, "70": {"v": "M", "c": "FFF5DEB3"}, "71": {"v": "E1", "c": "FFBA55D3"}, "72": {"v": "M3", "c": "FFF5DEB3"}, "73": {"v": "E34", "c": "FFBA55D3"}, "74": {"v": "M4", "c": "FFF5DEB3"}, "75": {"v": "E1", "c": "FFFFA500"}, "76": {"v": "E5", "c": "FFBA55D3"}, "77": {"v": "E34", "c": "FFFFA500"}, "78": {"v": "E6", "c": "FFBA55D3"}, "79": {"v": "E5", "c": "FFFFA500"}, "80": {"v": "E6", "c": "FFFFA500"}, "82": {"v": "Mission", "c": "FFDC143C"}, "83": {"v": "E6", "c": "FFBA55D3"}, "89": {"v": "E7", "c": "FFBA55D3"}, "96": {"v": "E8", "c": "FFBA55D3"}, "104": {"v": "E9", "c": "FFBA55D3"}, "113": {"v": "E10", "c": "FFBA55D3"}, "123": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "un-um-yn-ym", "domain": "Lire à voix haute", "link": null, "extra": "page 176", "cells": {"70": {"v": "L", "c": "FF4682B4"}, "71": {"v": "M", "c": "FFF5DEB3"}, "72": {"v": "E1", "c": "FFBA55D3"}, "73": {"v": "M3", "c": "FFF5DEB3"}, "74": {"v": "E34", "c": "FFBA55D3"}, "75": {"v": "M4", "c": "FFF5DEB3"}, "76": {"v": "E1", "c": "FFFFA500"}, "77": {"v": "E5", "c": "FFBA55D3"}, "78": {"v": "E34", "c": "FFFFA500"}, "79": {"v": "E6", "c": "FFBA55D3"}, "80": {"v": "E5", "c": "FFFFA500"}, "81": {"v": "E6", "c": "FFFFA500"}, "83": {"v": "Mission", "c": "FFDC143C"}, "84": {"v": "E6", "c": "FFBA55D3"}, "90": {"v": "E7", "c": "FFBA55D3"}, "97": {"v": "E8", "c": "FFBA55D3"}, "105": {"v": "E9", "c": "FFBA55D3"}, "114": {"v": "E10", "c": "FFBA55D3"}, "124": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "g gu ge", "domain": "Lire à voix haute", "link": null, "extra": "page 178", "cells": {"71": {"v": "L", "c": "FF4682B4"}, "72": {"v": "M", "c": "FFF5DEB3"}, "73": {"v": "E1", "c": "FFBA55D3"}, "74": {"v": "M3", "c": "FFF5DEB3"}, "75": {"v": "E34", "c": "FFBA55D3"}, "76": {"v": "M4", "c": "FFF5DEB3"}, "77": {"v": "E1", "c": "FFFFA500"}, "78": {"v": "E5", "c": "FFBA55D3"}, "79": {"v": "E34", "c": "FFFFA500"}, "80": {"v": "E6", "c": "FFBA55D3"}, "81": {"v": "E5", "c": "FFFFA500"}, "82": {"v": "E6", "c": "FFFFA500"}, "84": {"v": "Mission", "c": "FFDC143C"}, "85": {"v": "E6", "c": "FFBA55D3"}, "91": {"v": "E7", "c": "FFBA55D3"}, "98": {"v": "E8", "c": "FFBA55D3"}, "106": {"v": "E9", "c": "FFBA55D3"}, "115": {"v": "E10", "c": "FFBA55D3"}, "125": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "lettres muettes -nt", "domain": "Lire à voix haute", "link": null, "extra": "page 180", "cells": {"72": {"v": "L", "c": "FF4682B4"}, "73": {"v": "M", "c": "FFF5DEB3"}, "74": {"v": "E1", "c": "FFBA55D3"}, "75": {"v": "M3", "c": "FFF5DEB3"}, "76": {"v": "E34", "c": "FFBA55D3"}, "77": {"v": "M4", "c": "FFF5DEB3"}, "78": {"v": "E1", "c": "FFFFA500"}, "79": {"v": "E5", "c": "FFBA55D3"}, "80": {"v": "E34", "c": "FFFFA500"}, "81": {"v": "E6", "c": "FFBA55D3"}, "82": {"v": "E5", "c": "FFFFA500"}, "83": {"v": "E6", "c": "FFFFA500"}, "85": {"v": "Mission", "c": "FFDC143C"}, "86": {"v": "E6", "c": "FFBA55D3"}, "92": {"v": "E7", "c": "FFBA55D3"}, "99": {"v": "E8", "c": "FFBA55D3"}, "107": {"v": "E9", "c": "FFBA55D3"}, "116": {"v": "E10", "c": "FFBA55D3"}, "126": {"v": "E11", "c": "FFBA55D3"}}}, {"title": "59.0", "domain": "un-um-yn-ym", "link": null, "extra": null, "cells": {"9": {"v": 1.0, "c": "FFFFE599"}, "10": {"v": "i", "c": null}}}, {"title": "60.0", "domain": "lettres muettes -nt", "link": null, "extra": null, "cells": {"9": {"v": 2.0, "c": "FFFFE599"}, "10": {"v": "é", "c": null}}}]}, "Compréhension": {"date_cols": {"4": "2026-09-03", "5": "2026-09-07", "6": "2026-09-14", "7": "2026-09-21", "8": "2026-09-28", "9": "2026-10-26", "10": "2026-11-02", "11": "2026-11-09", "12": "2026-11-16", "13": "2026-11-23", "14": "2026-11-30", "15": "2026-12-28", "16": "2027-01-04", "17": "2027-01-11", "18": "2027-01-18", "19": "2027-01-25", "20": "2027-02-01", "21": "2027-03-01", "22": "2027-03-08", "23": "2027-03-15", "24": "2027-03-22", "25": "2027-03-29", "26": "2027-04-26", "27": "2027-05-03", "28": "2027-05-10", "29": "2027-05-17", "30": "2027-05-24", "68": "1900-03-06", "69": "1900-03-07", "70": "1900-03-08", "71": "1900-03-09"}, "rows": [{"title": "Associer phrase/image", "domain": "Comprendre un texte", "link": null, "extra": "1.0", "cells": {"4": {"v": "L", "c": "FF4682B4"}, "5": {"v": "M", "c": "FFF5DEB3"}, "6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Mémoriser qui/où/quand", "domain": "Comprendre un texte", "link": null, "extra": "2.0", "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Comprendre une action", "domain": "Comprendre un texte", "link": null, "extra": "3.0", "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Comprendre une consigne", "domain": "Comprendre un texte", "link": null, "extra": "4.0", "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "69": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Remettre images dans l’ordre", "domain": "Comprendre un texte", "link": null, "extra": "5.0", "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "70": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Comprendre chronologie", "domain": "Comprendre un texte", "link": null, "extra": "6.0", "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "71": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Comprendre émotions", "domain": "Comprendre un texte", "link": null, "extra": "7.0", "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Prélever une information", "domain": "Comprendre un texte", "link": null, "extra": "8.0", "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "69": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Résumer un court passage à l'oral ", "domain": "Comprendre un texte", "link": null, "extra": "9.0", "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "70": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Faire une prédiction", "domain": "Comprendre un texte", "link": null, "extra": "10.0", "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "68": {"v": "E9", "c": "FFBA55D3"}, "71": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Comprendre mots par contexte", "domain": "Comprendre un texte", "link": null, "extra": "11.0", "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Comparer dans le texte", "domain": "Comprendre un texte", "link": null, "extra": "12.0", "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Identifier problème", "domain": "Comprendre un texte", "link": null, "extra": "13.0", "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Comprendre solution", "domain": "Comprendre un texte", "link": null, "extra": "14.0", "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}}}, {"title": "Comprendre cause/conséquence ", "domain": "Comprendre un texte", "link": null, "extra": "15.0", "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}}}, {"title": "Comprendre substituts/pronoms", "domain": "Comprendre un texte", "link": null, "extra": "16.0", "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "69": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Faire une inférence simple", "domain": "Comprendre un texte", "link": null, "extra": "17.0", "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "70": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Comprendre dialogue", "domain": "Comprendre un texte", "link": null, "extra": "18.0", "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "68": {"v": "E8", "c": "FFFFA500"}, "71": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Faire des liens dans le texte", "domain": "Comprendre un texte", "link": null, "extra": "19.0", "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}}}, {"title": "Lire un texte seul et comprendre qq points simples ", "domain": "Comprendre un texte", "link": null, "extra": "20.0", "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "69": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Justifier avec indices", "domain": "Comprendre un texte", "link": null, "extra": "21.0", "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "70": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Faire seul le schéma comme narraconte", "domain": "Comprendre un texte", "link": null, "extra": "22.0", "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "71": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Comprendre documentaire court", "domain": "Comprendre un texte", "link": null, "extra": "23.0", "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}}}, {"title": "Comprendre implicite simple", "domain": "Comprendre un texte", "link": null, "extra": "24.0", "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}}}, {"title": "Résumer une histoire", "domain": "Comprendre un texte", "link": null, "extra": "25.0", "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}}}, {"title": "Rédiger une justification ", "domain": "Comprendre un texte", "link": null, "extra": "26.0", "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}}}, {"title": "2026-09-15 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"12": {"v": 2.0, "c": null}}}, {"title": "2026-09-15 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"12": {"v": 1.0, "c": null}}}]}, "Graphie": {"date_cols": {"4": "2026-09-03", "5": "2026-09-04", "6": "2026-09-07", "7": "2026-09-08", "8": "2026-09-10", "9": "2026-09-11", "10": "2026-09-14", "11": "2026-09-15", "12": "2026-09-17", "13": "2026-09-18", "14": "2026-09-21", "15": "2026-09-22", "16": "2026-09-24", "17": "2026-09-25", "18": "2026-09-28", "19": "2026-09-29", "20": "2026-10-01", "21": "2026-10-02", "22": "2026-10-05", "23": "2026-10-06", "24": "2026-10-08", "25": "2026-10-09", "26": "2026-10-12", "27": "2026-10-13", "28": "2026-11-02", "29": "2026-11-05", "30": "2026-11-09", "31": "2026-11-12", "32": "2026-11-16", "33": "2026-11-17", "34": "2026-11-20", "35": "2026-11-21", "36": "2026-11-23", "37": "2026-11-24", "38": "2026-11-27", "39": "2026-11-28", "40": "2026-11-30", "41": "2026-12-01", "42": "2026-12-04", "43": "2026-12-05", "44": "2026-12-07", "45": "2026-12-08", "46": "2026-12-11", "47": "2026-12-12", "48": "2026-12-14", "49": "2026-12-15", "50": "2026-12-18", "51": "2026-12-19", "52": "2026-12-21", "53": "2026-12-22", "54": "2026-12-25", "55": "2026-12-26", "56": "2026-12-28", "57": "2026-12-29", "58": "2027-01-01", "59": "2027-01-02", "60": "2027-01-04", "61": "2027-01-05", "62": "2027-01-08", "63": "2027-01-09", "64": "2027-01-11", "65": "2027-01-12", "66": "2027-01-15", "67": "2027-01-16", "68": "2027-01-18", "69": "2027-01-19", "70": "2027-01-22", "71": "2027-01-23", "72": "2027-01-25", "73": "2027-01-26", "74": "2027-01-29", "75": "2027-01-30", "76": "2027-02-01", "77": "2027-02-02", "78": "2027-02-05", "79": "2027-02-06", "80": "2027-02-08", "81": "2027-02-09", "82": "2027-02-12", "83": "2027-02-13", "84": "2027-02-15", "85": "2027-02-16", "86": "2027-02-19", "87": "2027-02-20", "88": "2027-02-22", "89": "2027-02-23", "90": "2027-02-26", "91": "2027-02-27", "92": "2027-03-01", "93": "2027-03-02", "94": "2027-03-05", "95": "2027-03-06", "96": "2027-03-08", "97": "2027-03-09", "98": "2027-03-12", "99": "2027-03-13", "100": "2027-03-15", "101": "2027-03-16", "102": "2027-03-19", "103": "2027-03-20", "104": "2027-03-22", "105": "2027-03-23", "106": "2027-03-26", "107": "2027-03-27", "108": "2027-03-29", "109": "2027-03-30", "110": "2027-04-02", "111": "2027-04-03", "112": "2027-04-05", "113": "2027-04-06", "114": "2027-04-09", "115": "2027-04-10", "116": "2027-04-12", "117": "2027-04-13"}, "rows": [{"title": "0-Je m'installe", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=NdCIyGd7cbc&t=7s", "extra": "1.0", "cells": {"4": {"v": "L", "c": "FF4682B4"}, "5": {"v": "M", "c": "FFF5DEB3"}, "6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}, "36": {"v": "E5", "c": "FFFFA500"}, "42": {"v": "E8", "c": "FFBA55D3"}, "51": {"v": "E8", "c": "FFFFA500"}, "59": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "1-Je prépare ma main 1", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=ir1P74SD5KA", "extra": "2.0", "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}, "37": {"v": "E5", "c": "FFFFA500"}, "43": {"v": "E8", "c": "FFBA55D3"}, "52": {"v": "E8", "c": "FFFFA500"}, "60": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "1-Je prépare ma main et mes doigts", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=idM0BjJf8Po", "extra": "3.0", "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}, "38": {"v": "E5", "c": "FFFFA500"}, "44": {"v": "E8", "c": "FFBA55D3"}, "53": {"v": "E8", "c": "FFFFA500"}, "61": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "1-Je place mon crayon", "domain": "Ecriture", "link": "https://youtu.be/x1r14dzBP1g?si=AWwbLwyweh7uXIS2", "extra": "4.0", "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}, "39": {"v": "E5", "c": "FFFFA500"}, "45": {"v": "E8", "c": "FFBA55D3"}, "54": {"v": "E8", "c": "FFFFA500"}, "62": {"v": "E9", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFFFA500"}}}, {"title": "2- Echauffement + Bouger ses doigts en yoyo", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=ir1P74SD5KA", "extra": "5.0", "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}, "40": {"v": "E5", "c": "FFFFA500"}, "46": {"v": "E8", "c": "FFBA55D3"}, "55": {"v": "E8", "c": "FFFFA500"}, "63": {"v": "E9", "c": "FFBA55D3"}, "70": {"v": "E9", "c": "FFFFA500"}}}, {"title": "3-Bouger ses doigts en tournant", "domain": "Ecriture", "link": "https://youtu.be/1UmvCgsMeWQ?si=hJsmB3FCojAe7grF", "extra": "6.0", "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}, "41": {"v": "E5", "c": "FFFFA500"}, "47": {"v": "E8", "c": "FFBA55D3"}, "56": {"v": "E8", "c": "FFFFA500"}, "64": {"v": "E9", "c": "FFBA55D3"}, "71": {"v": "E9", "c": "FFFFA500"}}}, {"title": "4-La fléchette", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=XPI3gxGcOPg", "extra": "7.0", "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "35": {"v": "E7", "c": "FFBA55D3"}, "42": {"v": "E5", "c": "FFFFA500"}, "48": {"v": "E8", "c": "FFBA55D3"}, "57": {"v": "E8", "c": "FFFFA500"}, "65": {"v": "E9", "c": "FFBA55D3"}, "72": {"v": "E9", "c": "FFFFA500"}}}, {"title": "5-Tourner et avancer", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=506-PK0hhhM", "extra": "8.0", "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}, "36": {"v": "E7", "c": "FFBA55D3"}, "43": {"v": "E5", "c": "FFFFA500"}, "49": {"v": "E8", "c": "FFBA55D3"}, "58": {"v": "E8", "c": "FFFFA500"}, "66": {"v": "E9", "c": "FFBA55D3"}, "69": {"v": "E10", "c": "FFBA55D3"}, "73": {"v": "E9", "c": "FFFFA500"}}}, {"title": "6-Se repérer dans les lignes ", "domain": "Ecriture", "link": "https://outilsdemalinous.eklablog.com/premiers-pas-vers-l-ecriture-dans-un-cahier-a126580054", "extra": "9.0", "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}, "37": {"v": "E7", "c": "FFBA55D3"}, "44": {"v": "E5", "c": "FFFFA500"}, "50": {"v": "E8", "c": "FFBA55D3"}, "59": {"v": "E8", "c": "FFFFA500"}, "67": {"v": "E9", "c": "FFBA55D3"}, "70": {"v": "E10", "c": "FFBA55D3"}, "74": {"v": "E9", "c": "FFFFA500"}}}, {"title": "7-1tourne, grande (boucles)", "domain": "Ecriture", "link": "https://graphopedagogue.com/wp-content/uploads/2026/03/Boucles.mp4", "extra": "10.0", "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}, "38": {"v": "E7", "c": "FFBA55D3"}, "45": {"v": "E5", "c": "FFFFA500"}, "51": {"v": "E8", "c": "FFBA55D3"}, "60": {"v": "E8", "c": "FFFFA500"}, "68": {"v": "E9", "c": "FFBA55D3"}, "71": {"v": "E10", "c": "FFBA55D3"}, "75": {"v": "E9", "c": "FFFFA500"}}}, {"title": "7-2 tourne, pic (pics 1)", "domain": "Ecriture", "link": "https://graphopedagogue.com/wp-content/uploads/2026/03/Pics-1.mp4", "extra": "11.0", "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E4", "c": "FFFFA500"}, "39": {"v": "E7", "c": "FFBA55D3"}, "46": {"v": "E5", "c": "FFFFA500"}, "52": {"v": "E8", "c": "FFBA55D3"}, "61": {"v": "E8", "c": "FFFFA500"}, "72": {"v": "E10", "c": "FFBA55D3"}, "76": {"v": "E9", "c": "FFFFA500"}}}, {"title": "7-3 pic, tourne pic (pics 2)", "domain": "Ecriture", "link": "https://graphopedagogue.com/wp-content/uploads/2026/03/Boucles.mp4", "extra": "12.0", "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E4", "c": "FFFFA500"}, "40": {"v": "E7", "c": "FFBA55D3"}, "47": {"v": "E5", "c": "FFFFA500"}, "53": {"v": "E8", "c": "FFBA55D3"}, "62": {"v": "E8", "c": "FFFFA500"}, "73": {"v": "E10", "c": "FFBA55D3"}, "77": {"v": "E9", "c": "FFFFA500"}}}, {"title": "8-1 e l le", "domain": "Ecriture", "link": "https://ladigitale.dev/digibunch/#/b/6a31b57357584", "extra": "13.0", "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}, "37": {"v": "E4", "c": "FFFFA500"}, "41": {"v": "E7", "c": "FFBA55D3"}, "48": {"v": "E5", "c": "FFFFA500"}, "54": {"v": "E8", "c": "FFBA55D3"}, "63": {"v": "E8", "c": "FFFFA500"}, "74": {"v": "E10", "c": "FFBA55D3"}, "78": {"v": "E9", "c": "FFFFA500"}}}, {"title": "8-2 i il le", "domain": "Ecriture", "link": "https://graphopedagogue.com/wp-content/uploads/2026/03/i-Seyes.mp4", "extra": "14.0", "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}, "38": {"v": "E4", "c": "FFFFA500"}, "42": {"v": "E7", "c": "FFBA55D3"}, "49": {"v": "E5", "c": "FFFFA500"}, "55": {"v": "E8", "c": "FFBA55D3"}, "64": {"v": "E8", "c": "FFFFA500"}, "75": {"v": "E10", "c": "FFBA55D3"}, "79": {"v": "E9", "c": "FFFFA500"}}}, {"title": "9-1 o", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-o/", "extra": "15.0", "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E6", "c": "FFBA55D3"}, "39": {"v": "E4", "c": "FFFFA500"}, "43": {"v": "E7", "c": "FFBA55D3"}, "50": {"v": "E5", "c": "FFFFA500"}, "56": {"v": "E8", "c": "FFBA55D3"}, "65": {"v": "E8", "c": "FFFFA500"}, "76": {"v": "E10", "c": "FFBA55D3"}, "80": {"v": "E9", "c": "FFFFA500"}}}, {"title": "9-2 a", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-a/", "extra": "16.0", "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}, "36": {"v": "E6", "c": "FFBA55D3"}, "40": {"v": "E4", "c": "FFFFA500"}, "44": {"v": "E7", "c": "FFBA55D3"}, "51": {"v": "E5", "c": "FFFFA500"}, "57": {"v": "E8", "c": "FFBA55D3"}, "66": {"v": "E8", "c": "FFFFA500"}, "69": {"v": "E8", "c": "FFFFA500"}, "77": {"v": "E10", "c": "FFBA55D3"}, "81": {"v": "E9", "c": "FFFFA500"}}}, {"title": "10 é è", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-e-3/", "extra": "17.0", "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}, "37": {"v": "E6", "c": "FFBA55D3"}, "41": {"v": "E4", "c": "FFFFA500"}, "45": {"v": "E7", "c": "FFBA55D3"}, "52": {"v": "E5", "c": "FFFFA500"}, "58": {"v": "E8", "c": "FFBA55D3"}, "67": {"v": "E8", "c": "FFFFA500"}, "70": {"v": "E8", "c": "FFFFA500"}, "78": {"v": "E10", "c": "FFBA55D3"}, "82": {"v": "E9", "c": "FFFFA500"}}}, {"title": "11- r", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-r/", "extra": "18.0", "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}, "38": {"v": "E6", "c": "FFBA55D3"}, "42": {"v": "E4", "c": "FFFFA500"}, "46": {"v": "E7", "c": "FFBA55D3"}, "53": {"v": "E5", "c": "FFFFA500"}, "59": {"v": "E8", "c": "FFBA55D3"}, "68": {"v": "E8", "c": "FFFFA500"}, "71": {"v": "E8", "c": "FFFFA500"}, "79": {"v": "E10", "c": "FFBA55D3"}, "83": {"v": "E9", "c": "FFFFA500"}}}, {"title": "12-13 t", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-t/", "extra": "20.0", "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}, "36": {"v": "E5", "c": "FFBA55D3"}, "39": {"v": "E6", "c": "FFBA55D3"}, "43": {"v": "E4", "c": "FFFFA500"}, "47": {"v": "E7", "c": "FFBA55D3"}, "54": {"v": "E5", "c": "FFFFA500"}, "60": {"v": "E8", "c": "FFBA55D3"}, "72": {"v": "E8", "c": "FFFFA500"}, "80": {"v": "E10", "c": "FFBA55D3"}, "84": {"v": "E9", "c": "FFFFA500"}}}, {"title": "14- c", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-c/", "extra": "21.0", "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E3", "c": "FFFFA500"}, "37": {"v": "E5", "c": "FFBA55D3"}, "40": {"v": "E6", "c": "FFBA55D3"}, "44": {"v": "E4", "c": "FFFFA500"}, "48": {"v": "E7", "c": "FFBA55D3"}, "55": {"v": "E5", "c": "FFFFA500"}, "61": {"v": "E8", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFBA55D3"}, "73": {"v": "E8", "c": "FFFFA500"}, "81": {"v": "E10", "c": "FFBA55D3"}, "85": {"v": "E9", "c": "FFFFA500"}}}, {"title": "15- h", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-h/", "extra": "22.0", "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}, "36": {"v": "E3", "c": "FFFFA500"}, "38": {"v": "E5", "c": "FFBA55D3"}, "41": {"v": "E6", "c": "FFBA55D3"}, "45": {"v": "E4", "c": "FFFFA500"}, "49": {"v": "E7", "c": "FFBA55D3"}, "56": {"v": "E5", "c": "FFFFA500"}, "62": {"v": "E8", "c": "FFBA55D3"}, "70": {"v": "E9", "c": "FFBA55D3"}, "74": {"v": "E8", "c": "FFFFA500"}, "82": {"v": "E10", "c": "FFBA55D3"}, "86": {"v": "E9", "c": "FFFFA500"}}}, {"title": "16- n", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-n/", "extra": "23.0", "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}, "37": {"v": "E3", "c": "FFFFA500"}, "39": {"v": "E5", "c": "FFBA55D3"}, "42": {"v": "E6", "c": "FFBA55D3"}, "46": {"v": "E4", "c": "FFFFA500"}, "50": {"v": "E7", "c": "FFBA55D3"}, "57": {"v": "E5", "c": "FFFFA500"}, "63": {"v": "E8", "c": "FFBA55D3"}, "71": {"v": "E9", "c": "FFBA55D3"}, "75": {"v": "E8", "c": "FFFFA500"}, "83": {"v": "E10", "c": "FFBA55D3"}, "87": {"v": "E9", "c": "FFFFA500"}}}, {"title": "17-21 m", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-m/", "extra": "24.0", "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}, "35": {"v": "Mission", "c": "FFDC143C"}, "38": {"v": "E3", "c": "FFFFA500"}, "40": {"v": "E5", "c": "FFBA55D3"}, "43": {"v": "E6", "c": "FFBA55D3"}, "47": {"v": "E4", "c": "FFFFA500"}, "51": {"v": "E7", "c": "FFBA55D3"}, "58": {"v": "E5", "c": "FFFFA500"}, "64": {"v": "E8", "c": "FFBA55D3"}, "72": {"v": "E9", "c": "FFBA55D3"}, "76": {"v": "E8", "c": "FFFFA500"}, "84": {"v": "E10", "c": "FFBA55D3"}, "88": {"v": "E9", "c": "FFFFA500"}}}, {"title": "22- 0 1 2 ", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=OeKcdm3kMWk&time_continue=50&source_ve_path=NzY3NTg&embeds_referring_euri=https%3A%2F%2Fgraphopedagogue.com%2F&embeds_referring_origin=https%3A%2F%2Fgraphopedagogue.com", "extra": "25.0", "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}, "35": {"v": "E4", "c": "FFBA55D3"}, "36": {"v": "Mission", "c": "FFDC143C"}, "39": {"v": "E3", "c": "FFFFA500"}, "41": {"v": "E5", "c": "FFBA55D3"}, "44": {"v": "E6", "c": "FFBA55D3"}, "48": {"v": "E4", "c": "FFFFA500"}, "52": {"v": "E7", "c": "FFBA55D3"}, "59": {"v": "E5", "c": "FFFFA500"}, "65": {"v": "E8", "c": "FFBA55D3"}, "73": {"v": "E9", "c": "FFBA55D3"}, "77": {"v": "E8", "c": "FFFFA500"}, "85": {"v": "E10", "c": "FFBA55D3"}, "89": {"v": "E9", "c": "FFFFA500"}}}, {"title": "23- 3 4 5", "domain": "Ecriture", "link": "https://www.yout-ube.com/watch?v=OeKcdm3kMWk&time_continue=50&source_ve_path=NzY3NTg&embeds_referring_euri=https%3A%2F%2Fgraphopedagogue.com%2F&embeds_referring_origin=https%3A%2F%2Fgraphopedagogue.com", "extra": "26.0", "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFFFA500"}, "36": {"v": "E4", "c": "FFBA55D3"}, "37": {"v": "Mission", "c": "FFDC143C"}, "40": {"v": "E3", "c": "FFFFA500"}, "42": {"v": "E5", "c": "FFBA55D3"}, "45": {"v": "E6", "c": "FFBA55D3"}, "49": {"v": "E4", "c": "FFFFA500"}, "53": {"v": "E7", "c": "FFBA55D3"}, "60": {"v": "E5", "c": "FFFFA500"}, "66": {"v": "E8", "c": "FFBA55D3"}, "74": {"v": "E9", "c": "FFBA55D3"}, "78": {"v": "E8", "c": "FFFFA500"}, "86": {"v": "E10", "c": "FFBA55D3"}, "90": {"v": "E9", "c": "FFFFA500"}}}, {"title": "24 - s", "domain": "Ecriture", "link": "https://maitrelucas.fr/fiche/ecriture-cursive-du-s/", "extra": "27.0", "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFFFA500"}, "37": {"v": "E4", "c": "FFBA55D3"}, "38": {"v": "Mission", "c": "FFDC143C"}, "41": {"v": "E3", "c": "FFFFA500"}, "43": {"v": "E5", "c": "FFBA55D3"}, "46": {"v": "E6", "c": "FFBA55D3"}, "50": {"v": "E4", "c": "FFFFA500"}, "54": {"v": "E7", "c": "FFBA55D3"}, "61": {"v": "E5", "c": "FFFFA500"}, "67": {"v": "E8", "c": "FFBA55D3"}, "75": {"v": "E9", "c": "FFBA55D3"}, "79": {"v": "E8", "c": "FFFFA500"}, "87": {"v": "E10", "c": "FFBA55D3"}, "91": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Apprendre à bien copier", "domain": "Copie", "link": "https://graphopedagogue.com/2024/12/30/pour-bien-copier/", "extra": "55.0", "cells": {"57": {"v": "L", "c": "FF4682B4"}, "58": {"v": "M", "c": "FFF5DEB3"}, "59": {"v": "E1", "c": "FFBA55D3"}, "60": {"v": "E2", "c": "FFBA55D3"}, "61": {"v": "E1", "c": "FFFFA500"}, "62": {"v": "E3", "c": "FFBA55D3"}, "64": {"v": "E2", "c": "FFFFA500"}, "65": {"v": "E4", "c": "FFBA55D3"}, "66": {"v": "Mission", "c": "FFDC143C"}, "69": {"v": "E5", "c": "FFBA55D3"}, "71": {"v": "E4", "c": "FFFFA500"}, "75": {"v": "E6", "c": "FFBA55D3"}, "78": {"v": "E5", "c": "FFFFA500"}, "83": {"v": "E7", "c": "FFBA55D3"}, "87": {"v": "E6", "c": "FFFFA500"}, "92": {"v": "E8", "c": "FFBA55D3"}, "96": {"v": "E7", "c": "FFFFA500"}, "103": {"v": "E9", "c": "FFBA55D3"}, "107": {"v": "E8", "c": "FFFFA500"}, "115": {"v": "E10", "c": "FFBA55D3"}}}]}, "Rédaction": {"date_cols": {"4": "2026-09-07", "5": "2026-09-14", "6": "2026-09-21", "7": "2026-09-28", "8": "2026-10-05", "9": "2026-11-02", "10": "2026-11-09", "11": "2026-11-16", "12": "2026-11-23", "13": "2026-11-30", "14": "2026-12-07", "15": "2027-01-04", "16": "2027-01-11", "17": "2027-01-18", "18": "2027-01-25", "19": "2027-02-01", "20": "2027-02-08", "21": "2027-03-08", "22": "2027-03-15", "23": "2027-03-22", "24": "2027-03-29", "25": "2027-04-05", "26": "2027-05-03", "27": "2027-05-10", "28": "2027-05-17", "29": "2027-05-24", "30": "2027-05-31", "31": "2027-06-07", "32": "2027-06-14", "33": "2027-06-21", "69": "1900-03-06", "70": "1900-03-07", "71": "1900-03-08", "72": "1900-03-09"}, "rows": [{"title": "Encoder un mot", "domain": "Rédaction ", "link": null, "extra": "1.0", "cells": {"4": {"v": "L", "c": "FF4682B4"}, "5": {"v": "M", "c": "FFF5DEB3"}, "6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Copier une phrase", "domain": "Rédaction ", "link": null, "extra": "2.0", "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Compléter une phrase", "domain": "Rédaction ", "link": null, "extra": "3.0", "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Écrire une phrase modèle", "domain": "Rédaction ", "link": null, "extra": "4.0", "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Phrase à partir d’image", "domain": "Rédaction ", "link": null, "extra": "5.0", "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}, "70": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Écrire une phrase autonome", "domain": "Rédaction ", "link": null, "extra": "6.0", "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "71": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Relier 2 phrases", "domain": "Rédaction ", "link": null, "extra": "7.0", "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "72": {"v": "E9", "c": "FFFFA500"}}}, {"title": "Décrire un personnage", "domain": "Rédaction ", "link": null, "extra": "8.0", "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Réponse écrite courte", "domain": "Rédaction ", "link": null, "extra": "9.0", "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}, "70": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Produire 2 phrases", "domain": "Rédaction ", "link": null, "extra": "10.0", "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "71": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Écrire une suite", "domain": "Rédaction ", "link": null, "extra": "11.0", "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFBA55D3"}, "72": {"v": "E10", "c": "FFBA55D3"}}}, {"title": "Compléter un récit", "domain": "Rédaction ", "link": null, "extra": "12.0", "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Transformer une phrase", "domain": "Rédaction ", "link": null, "extra": "13.0", "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Écrire problème/solution", "domain": "Rédaction ", "link": null, "extra": "14.0", "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Produire mini récit", "domain": "Rédaction ", "link": null, "extra": "15.0", "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Réinvestir vocabulaire", "domain": "Rédaction ", "link": null, "extra": "16.0", "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Enrichir une phrase", "domain": "Rédaction ", "link": null, "extra": "17.0", "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "70": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Justifier une réponse", "domain": "Rédaction ", "link": null, "extra": "18.0", "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "71": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Écrire un dialogue court", "domain": "Rédaction ", "link": null, "extra": "19.0", "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "69": {"v": "E8", "c": "FFFFA500"}, "72": {"v": "E8", "c": "FFFFA500"}}}, {"title": "Petit texte guidé", "domain": "Rédaction ", "link": null, "extra": "20.0", "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Écrire 3 phrases", "domain": "Rédaction ", "link": null, "extra": "21.0", "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}, "70": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Produire une fin", "domain": "Rédaction ", "link": null, "extra": "22.0", "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "71": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Produire un récit", "domain": "Rédaction ", "link": null, "extra": "23.0", "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "72": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "Écrire documentaire", "domain": "Rédaction ", "link": null, "extra": "24.0", "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "Réviser/corriger texte", "domain": "Rédaction ", "link": null, "extra": "25.0", "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "Production finale autonome", "domain": "Rédaction ", "link": null, "extra": "26.0", "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}}}]}, "Calcul mental": {"date_cols": {"3": "2026-08-31", "4": "2026-09-07", "5": "2026-09-14", "6": "2026-09-21", "7": "2026-09-28", "8": "2026-10-05", "9": "2026-11-02", "10": "2026-11-09", "11": "2026-11-16", "12": "2026-11-23", "13": "2026-11-30", "14": "2026-12-07", "15": "2027-01-04", "16": "2027-01-11", "17": "2027-01-18", "18": "2027-01-25", "19": "2027-02-01", "20": "2027-02-08", "21": "2027-03-08", "22": "2027-03-15", "23": "2027-03-22", "24": "2027-03-29", "25": "2027-04-05", "26": "2027-05-03", "27": "2027-05-10", "28": "2027-05-17", "29": "2027-05-24", "30": "2027-05-31", "31": "2027-06-07", "32": "2027-06-14", "33": "2027-06-21", "34": "2027-06-28"}, "rows": [{"title": "N0 a Inscrire un nombre", "domain": "Nombres", "link": null, "extra": null, "cells": {"3": {"v": "L", "c": "FF4682B4"}, "4": {"v": "M", "c": "FFF5DEB3"}, "5": {"v": "E1", "c": "FFBA55D3"}, "6": {"v": "E2", "c": "FFBA55D3"}, "7": {"v": "E1", "c": "FFFFA500"}, "8": {"v": "E3", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFFFA500"}, "11": {"v": "E4", "c": "FFBA55D3"}, "12": {"v": "Mission", "c": "FFDC143C"}, "15": {"v": "E3", "c": "FFFFA500"}, "17": {"v": "E5", "c": "FFBA55D3"}, "20": {"v": "E6", "c": "FFBA55D3"}, "24": {"v": "E4", "c": "FFFFA500"}, "28": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "N0 b Lire un nombre", "domain": "Nombres", "link": null, "extra": null, "cells": {"4": {"v": "L", "c": "FF4682B4"}, "5": {"v": "M", "c": "FFF5DEB3"}, "6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "C1 Ajouter ou soustraire 1, 2, 3 ou 4", "domain": "Calcul", "link": null, "extra": null, "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "C2 S'appuyer sur 5 pour calculer", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "C5 Compléments à 10", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "C6 Doubles (<10, <20, des dizaines entières),presque doubles ", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "C7 Ajouter ou soustraire 10, ajouter 9", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "C8 Compléments à D", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}}}, {"title": "C9 Ajouter ou soustraire un nombre <10", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}}}, {"title": "C10 Ajouter ou soustraire des D entières", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}}}, {"title": "C12 Ajouter deux nombres <100 (< 50, <100)", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}}}, {"title": "C13 Moitiés de 2 à 20 (<10, <20, des dizaines entières) ", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "C15 Soustraire U à D <100", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "C16 Table de multiplication de 1,2, 5, 10 (1,2,5,10)", "domain": "Calcul mental", "link": null, "extra": null, "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}}}]}, "Problèmes": {"date_cols": {"3": "2026-08-31", "4": "2026-09-07", "5": "2026-09-14", "6": "2026-09-21", "7": "2026-09-28", "8": "2026-10-05", "9": "2026-11-02", "10": "2026-11-09", "11": "2026-11-16", "12": "2026-11-23", "13": "2026-11-30", "14": "2026-12-07", "15": "2027-01-04", "16": "2027-01-11", "17": "2027-01-18", "18": "2027-01-25", "19": "2027-02-01", "20": "2027-02-08", "21": "2027-03-08", "22": "2027-03-15", "23": "2027-03-22", "24": "2027-03-29", "25": "2027-04-05", "26": "2027-05-03", "27": "2027-05-10", "28": "2027-05-17", "29": "2027-05-24", "30": "2027-05-31", "31": "2027-06-07", "32": "2027-06-14", "33": "2027-06-21", "34": "2027-06-28"}, "rows": [{"title": "2026-01-01 00:00:00", "domain": "Partie-tout", "link": null, "extra": null, "cells": {"5": {"v": "E1", "c": "FFBA55D3"}, "6": {"v": "E2", "c": "FFBA55D3"}, "7": {"v": "E1", "c": "FFFFA500"}, "8": {"v": "E3", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFFFA500"}, "11": {"v": "E4", "c": "FFBA55D3"}, "12": {"v": "Mission", "c": "FFDC143C"}, "15": {"v": "E3", "c": "FFFFA500"}, "17": {"v": "E5", "c": "FFBA55D3"}, "20": {"v": "E6", "c": "FFBA55D3"}, "24": {"v": "E4", "c": "FFFFA500"}, "28": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2026-02-01 00:00:00", "domain": "Partie-tout", "link": null, "extra": null, "cells": {"6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2026-03-01 00:00:00", "domain": "Partie-tout", "link": null, "extra": null, "cells": {"6": {"v": "None", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2026-04-01 00:00:00", "domain": "Partie-tout", "link": null, "extra": null, "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2026-05-01 00:00:00", "domain": "Partie-tout", "link": null, "extra": null, "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2026-06-01 00:00:00", "domain": "Partie-tout", "link": null, "extra": null, "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2026-01-02 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2026-02-02 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}}}, {"title": "2026-03-02 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}}}, {"title": "2026-04-02 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"12": {"v": "L", "c": "FF4682B4"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}}}, {"title": "2026-05-02 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}}}, {"title": "2026-06-02 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "2026-01-03 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "2026-02-03 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "2026-03-03 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "2026-04-03 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "2026-05-03 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "2026-06-03 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "2026-01-04 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}}}, {"title": "2026-02-04 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}}}, {"title": "2026-03-04 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "2026-04-04 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "2026-05-04 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "2026-01-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}}}, {"title": "2026-02-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}}}, {"title": "2026-03-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "2026-04-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "2026-05-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFBA55D3"}, "34": {"v": "E1", "c": "FFFFA500"}}}, {"title": "2026-06-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"31": {"v": "L", "c": "FF4682B4"}, "32": {"v": "M", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFBA55D3"}}}, {"title": "2026-07-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"32": {"v": "L", "c": "FF4682B4"}, "33": {"v": "M", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFBA55D3"}}}, {"title": "2026-08-05 00:00:00", "domain": null, "link": null, "extra": null, "cells": {"33": {"v": "L", "c": "FF4682B4"}, "34": {"v": "M", "c": "FFF5DEB3"}}}]}, "Maths": {"date_cols": {"3": "2026-09-03", "4": "2026-09-04", "5": "2026-09-07", "6": "2026-09-10", "7": "2026-09-14", "8": "2026-09-17", "9": "2026-09-21", "10": "2026-09-24", "11": "2026-09-28", "12": "2026-10-01", "13": "2026-10-05", "14": "2026-10-08", "15": "2026-11-02", "16": "2026-11-05", "17": "2026-11-09", "18": "2026-11-12", "19": "2026-11-16", "20": "2026-11-19", "21": "2026-11-23", "22": "2026-11-26", "23": "2026-11-30", "24": "2026-12-03", "25": "2026-12-07", "26": "2026-12-10", "27": "2027-01-04", "28": "2027-01-07", "29": "2027-01-11", "30": "2027-01-14", "31": "2027-01-18", "32": "2027-01-21", "33": "2027-01-25", "34": "2027-01-28", "35": "2027-02-01", "36": "2027-02-04", "37": "2027-02-08", "38": "2027-02-11", "39": "2027-03-08", "40": "2027-03-11", "41": "2027-03-15", "42": "2027-03-18", "43": "2027-03-22", "44": "2027-03-25", "45": "2027-03-29", "46": "2027-04-01", "47": "2027-04-05", "48": "2027-04-08", "49": "2027-04-12", "50": "2027-04-15", "51": "2027-05-10", "52": "2027-05-13", "53": "2027-05-17", "54": "2027-05-20", "55": "2027-05-24", "56": "2027-05-27", "57": "2027-05-31", "58": "2027-06-03", "59": "2027-06-07", "60": "2027-06-10", "61": "2027-06-14", "62": "2027-06-17", "63": "2027-06-21", "64": "2027-06-24", "65": "2027-06-28", "66": "2027-07-01", "67": "2027-07-05", "68": "2027-07-08", "69": "2027-07-12"}, "rows": [{"title": "C1- Ajouter ou soustraire 1,2,3 ou 4", "domain": "Calcul", "link": "https://calcul-mental-xi.vercel.app/", "extra": null, "cells": {"3": {"v": "L", "c": "FF4682B4"}, "4": {"v": "M", "c": "FFF5DEB3"}, "5": {"v": "E1", "c": "FFBA55D3"}, "6": {"v": "E2", "c": "FFBA55D3"}, "7": {"v": "E1", "c": "FFFFA500"}, "8": {"v": "E3", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFFFA500"}, "11": {"v": "E4", "c": "FFBA55D3"}, "12": {"v": "Mission", "c": "FFDC143C"}, "15": {"v": "E3", "c": "FFFFA500"}, "17": {"v": "E5", "c": "FFBA55D3"}, "20": {"v": "E6", "c": "FFBA55D3"}, "24": {"v": "E4", "c": "FFFFA500"}, "28": {"v": "E7", "c": "FFBA55D3"}, "35": {"v": "E5", "c": "FFFFA500"}, "41": {"v": "E8", "c": "FFBA55D3"}, "50": {"v": "E8", "c": "FFFFA500"}, "58": {"v": "E9", "c": "FFBA55D3"}, "68": {"v": "E9", "c": "FFFFA500"}}}, {"title": "N0 a. Inscrire un nombre sur le boulier", "domain": "Nombres", "link": "https://calcul-mental-xi.vercel.app/", "extra": null, "cells": {"4": {"v": "L", "c": "FF4682B4"}, "5": {"v": "M", "c": "FFF5DEB3"}, "6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}, "36": {"v": "E5", "c": "FFFFA500"}, "42": {"v": "E8", "c": "FFBA55D3"}, "51": {"v": "E8", "c": "FFFFA500"}, "59": {"v": "E9", "c": "FFBA55D3"}, "69": {"v": "E9", "c": "FFFFA500"}}}, {"title": "N0 b. Lire un nombre sur le boulier", "domain": "Nombres", "link": "https://calcul-mental-xi.vercel.app/", "extra": null, "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}, "37": {"v": "E5", "c": "FFFFA500"}, "43": {"v": "E8", "c": "FFBA55D3"}, "52": {"v": "E8", "c": "FFFFA500"}, "60": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "N1-N2 Construire des collections jusqu'à 10", "domain": "Calcul", "link": "https://ladigitale.dev/digiflashcards/#/f/b68b7ab252f420c1", "extra": null, "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}, "38": {"v": "E5", "c": "FFFFA500"}, "44": {"v": "E8", "c": "FFBA55D3"}, "53": {"v": "E8", "c": "FFFFA500"}, "61": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "C1- Ajouter ou soustraire 1,2,3 ou 4", "domain": "Calcul", "link": "https://calcul-mental-xi.vercel.app/", "extra": null, "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}, "39": {"v": "E5", "c": "FFFFA500"}, "45": {"v": "E8", "c": "FFBA55D3"}, "54": {"v": "E8", "c": "FFFFA500"}, "62": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "C2. S'appuyer sur 5 pour calculer", "domain": "Mesures", "link": "https://calcul-mental-xi.vercel.app/", "extra": null, "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}, "40": {"v": "E5", "c": "FFFFA500"}, "46": {"v": "E8", "c": "FFBA55D3"}, "55": {"v": "E8", "c": "FFFFA500"}, "63": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "M1-M2. Comparer des longueurs", "domain": "Problèmes", "link": null, "extra": null, "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}, "41": {"v": "E5", "c": "FFFFA500"}, "47": {"v": "E8", "c": "FFBA55D3"}, "56": {"v": "E8", "c": "FFFFA500"}, "64": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "P1. Comparaison", "domain": "Nombres", "link": null, "extra": null, "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "35": {"v": "E7", "c": "FFBA55D3"}, "42": {"v": "E5", "c": "FFFFA500"}, "48": {"v": "E8", "c": "FFBA55D3"}, "57": {"v": "E8", "c": "FFFFA500"}, "65": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "N3-N5. Comparer des collections", "domain": "Calcul", "link": "https://ladigitale.dev/digiflashcards/#/f/6a317c4bdaa46", "extra": null, "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}, "36": {"v": "E7", "c": "FFBA55D3"}, "43": {"v": "E5", "c": "FFFFA500"}, "49": {"v": "E8", "c": "FFBA55D3"}, "58": {"v": "E8", "c": "FFFFA500"}, "66": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "C3. Utiliser les signes + - =", "domain": null, "link": "https://ladigitale.dev/digiflashcards/#/f/1c4f27ba1493a7ee", "extra": null, "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}, "37": {"v": "E7", "c": "FFBA55D3"}, "44": {"v": "E5", "c": "FFFFA500"}, "50": {"v": "E8", "c": "FFBA55D3"}, "59": {"v": "E8", "c": "FFFFA500"}, "67": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "N7-N8. Représenter les nombres jusqu'à 19 et 59", "domain": "Mesures", "link": null, "extra": null, "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E4", "c": "FFFFA500"}, "39": {"v": "E7", "c": "FFBA55D3"}, "46": {"v": "E5", "c": "FFFFA500"}, "52": {"v": "E8", "c": "FFBA55D3"}, "61": {"v": "E8", "c": "FFFFA500"}, "69": {"v": "E9", "c": "FFBA55D3"}}}, {"title": "M4-M5. Manipuler des euros, constituer des sommes", "domain": "Nombres", "link": null, "extra": null, "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E4", "c": "FFFFA500"}, "40": {"v": "E7", "c": "FFBA55D3"}, "47": {"v": "E5", "c": "FFFFA500"}, "53": {"v": "E8", "c": "FFBA55D3"}, "62": {"v": "E8", "c": "FFFFA500"}}}, {"title": "N6-N13. Dénombrer par groupements par 10. Ecrire les nombres <100", "domain": "Problèmes", "link": null, "extra": null, "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}, "37": {"v": "E4", "c": "FFFFA500"}, "41": {"v": "E7", "c": "FFBA55D3"}, "48": {"v": "E5", "c": "FFFFA500"}, "54": {"v": "E8", "c": "FFBA55D3"}, "63": {"v": "E8", "c": "FFFFA500"}}}, {"title": "P2. Partie-tout", "domain": "Nombres", "link": null, "extra": null, "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}, "38": {"v": "E4", "c": "FFFFA500"}, "42": {"v": "E7", "c": "FFBA55D3"}, "49": {"v": "E5", "c": "FFFFA500"}, "55": {"v": "E8", "c": "FFBA55D3"}, "64": {"v": "E8", "c": "FFFFA500"}}}, {"title": "N4. Ordonner les nombres jusqu'à 19", "domain": "Problèmes", "link": null, "extra": null, "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E6", "c": "FFBA55D3"}, "39": {"v": "E4", "c": "FFFFA500"}, "43": {"v": "E7", "c": "FFBA55D3"}, "50": {"v": "E5", "c": "FFFFA500"}, "56": {"v": "E8", "c": "FFBA55D3"}, "65": {"v": "E8", "c": "FFFFA500"}}}, {"title": "P3. Problèmes de partie-tout : tranformation", "domain": "Mesures", "link": null, "extra": null, "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}, "36": {"v": "E6", "c": "FFBA55D3"}, "40": {"v": "E4", "c": "FFFFA500"}, "44": {"v": "E7", "c": "FFBA55D3"}, "51": {"v": "E5", "c": "FFFFA500"}, "57": {"v": "E8", "c": "FFBA55D3"}, "66": {"v": "E8", "c": "FFFFA500"}}}, {"title": "M7-M8. Rendre la monnaie", "domain": "Nombres", "link": null, "extra": null, "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}, "37": {"v": "E6", "c": "FFBA55D3"}, "41": {"v": "E4", "c": "FFFFA500"}, "45": {"v": "E7", "c": "FFBA55D3"}, "52": {"v": "E5", "c": "FFFFA500"}, "58": {"v": "E8", "c": "FFBA55D3"}, "67": {"v": "E8", "c": "FFFFA500"}}}, {"title": "N9-N12. Comparer jusqu'à 59", "domain": "Nombres", "link": null, "extra": null, "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}, "38": {"v": "E6", "c": "FFBA55D3"}, "42": {"v": "E4", "c": "FFFFA500"}, "46": {"v": "E7", "c": "FFBA55D3"}, "53": {"v": "E5", "c": "FFFFA500"}, "59": {"v": "E8", "c": "FFBA55D3"}, "68": {"v": "E8", "c": "FFFFA500"}}}, {"title": "N10-N11. Ordonner les nombres jusqu'à 59", "domain": "Calcul", "link": null, "extra": null, "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}, "36": {"v": "E5", "c": "FFBA55D3"}, "39": {"v": "E6", "c": "FFBA55D3"}, "43": {"v": "E4", "c": "FFFFA500"}, "47": {"v": "E7", "c": "FFBA55D3"}, "54": {"v": "E5", "c": "FFFFA500"}, "60": {"v": "E8", "c": "FFBA55D3"}, "69": {"v": "E8", "c": "FFFFA500"}}}, {"title": "C14. Poser une addition en colonnes", "domain": "Nombres", "link": null, "extra": null, "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E3", "c": "FFFFA500"}, "37": {"v": "E5", "c": "FFBA55D3"}, "40": {"v": "E6", "c": "FFBA55D3"}, "44": {"v": "E4", "c": "FFFFA500"}, "48": {"v": "E7", "c": "FFBA55D3"}, "55": {"v": "E5", "c": "FFFFA500"}, "61": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "N15-N23. Comparer jusqu'à 100", "domain": "Géométrie", "link": null, "extra": null, "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}, "36": {"v": "E3", "c": "FFFFA500"}, "38": {"v": "E5", "c": "FFBA55D3"}, "41": {"v": "E6", "c": "FFBA55D3"}, "45": {"v": "E4", "c": "FFFFA500"}, "49": {"v": "E7", "c": "FFBA55D3"}, "56": {"v": "E5", "c": "FFFFA500"}, "62": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "G3. Coder un déplacement", "domain": "Mesures", "link": null, "extra": null, "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}, "37": {"v": "E3", "c": "FFFFA500"}, "39": {"v": "E5", "c": "FFBA55D3"}, "42": {"v": "E6", "c": "FFBA55D3"}, "46": {"v": "E4", "c": "FFFFA500"}, "50": {"v": "E7", "c": "FFBA55D3"}, "57": {"v": "E5", "c": "FFFFA500"}, "63": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "M6-M9. Mesurer des longueurs avec des unités arbitraires", "domain": "Géométrie", "link": null, "extra": null, "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}, "35": {"v": "Mission", "c": "FFDC143C"}, "38": {"v": "E3", "c": "FFFFA500"}, "40": {"v": "E5", "c": "FFBA55D3"}, "43": {"v": "E6", "c": "FFBA55D3"}, "47": {"v": "E4", "c": "FFFFA500"}, "51": {"v": "E7", "c": "FFBA55D3"}, "58": {"v": "E5", "c": "FFFFA500"}, "64": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "G4-G7. Construire un assemblage de solides. Construire un solide", "domain": "Nombres", "link": null, "extra": null, "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}, "35": {"v": "E4", "c": "FFBA55D3"}, "36": {"v": "Mission", "c": "FFDC143C"}, "39": {"v": "E3", "c": "FFFFA500"}, "41": {"v": "E5", "c": "FFBA55D3"}, "44": {"v": "E6", "c": "FFBA55D3"}, "48": {"v": "E4", "c": "FFFFA500"}, "52": {"v": "E7", "c": "FFBA55D3"}, "59": {"v": "E5", "c": "FFFFA500"}, "65": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "N14-N24. Se repérer dans le tableau des nombres", "domain": "Nombres", "link": null, "extra": null, "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFFFA500"}, "36": {"v": "E4", "c": "FFBA55D3"}, "37": {"v": "Mission", "c": "FFDC143C"}, "40": {"v": "E3", "c": "FFFFA500"}, "42": {"v": "E5", "c": "FFBA55D3"}, "45": {"v": "E6", "c": "FFBA55D3"}, "49": {"v": "E4", "c": "FFFFA500"}, "53": {"v": "E7", "c": "FFBA55D3"}, "60": {"v": "E5", "c": "FFFFA500"}, "66": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "N16-N21. Lire et écrire les nombres jusqu'à 79 et 99", "domain": "Nombres", "link": null, "extra": null, "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFFFA500"}, "37": {"v": "E4", "c": "FFBA55D3"}, "38": {"v": "Mission", "c": "FFDC143C"}, "41": {"v": "E3", "c": "FFFFA500"}, "43": {"v": "E5", "c": "FFBA55D3"}, "46": {"v": "E6", "c": "FFBA55D3"}, "50": {"v": "E4", "c": "FFFFA500"}, "54": {"v": "E7", "c": "FFBA55D3"}, "61": {"v": "E5", "c": "FFFFA500"}, "67": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "N17-N19. Représenter les nombres jusqu'à 79", "domain": "Calcul", "link": null, "extra": null, "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFBA55D3"}, "34": {"v": "E1", "c": "FFFFA500"}, "35": {"v": "E3", "c": "FFBA55D3"}, "37": {"v": "E2", "c": "FFFFA500"}, "38": {"v": "E4", "c": "FFBA55D3"}, "39": {"v": "Mission", "c": "FFDC143C"}, "42": {"v": "E3", "c": "FFFFA500"}, "44": {"v": "E5", "c": "FFBA55D3"}, "47": {"v": "E6", "c": "FFBA55D3"}, "51": {"v": "E4", "c": "FFFFA500"}, "55": {"v": "E7", "c": "FFBA55D3"}, "62": {"v": "E5", "c": "FFFFA500"}, "68": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "C15. Choisir une stratégie pour calculer", "domain": "Problèmes", "link": null, "extra": null, "cells": {"31": {"v": "L", "c": "FF4682B4"}, "32": {"v": "M", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFBA55D3"}, "35": {"v": "E1", "c": "FFFFA500"}, "36": {"v": "E3", "c": "FFBA55D3"}, "38": {"v": "E2", "c": "FFFFA500"}, "39": {"v": "E4", "c": "FFBA55D3"}, "40": {"v": "Mission", "c": "FFDC143C"}, "43": {"v": "E3", "c": "FFFFA500"}, "45": {"v": "E5", "c": "FFBA55D3"}, "48": {"v": "E6", "c": "FFBA55D3"}, "52": {"v": "E4", "c": "FFFFA500"}, "56": {"v": "E7", "c": "FFBA55D3"}, "63": {"v": "E5", "c": "FFFFA500"}, "69": {"v": "E8", "c": "FFBA55D3"}}}, {"title": "P4. Les problèmes multiplicatifs", "domain": "Nombres", "link": null, "extra": null, "cells": {"32": {"v": "L", "c": "FF4682B4"}, "33": {"v": "M", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFBA55D3"}, "36": {"v": "E1", "c": "FFFFA500"}, "37": {"v": "E3", "c": "FFBA55D3"}, "39": {"v": "E2", "c": "FFFFA500"}, "40": {"v": "E4", "c": "FFBA55D3"}, "41": {"v": "Mission", "c": "FFDC143C"}, "44": {"v": "E3", "c": "FFFFA500"}, "46": {"v": "E5", "c": "FFBA55D3"}, "49": {"v": "E6", "c": "FFBA55D3"}, "53": {"v": "E4", "c": "FFFFA500"}, "57": {"v": "E7", "c": "FFBA55D3"}, "64": {"v": "E5", "c": "FFFFA500"}}}, {"title": "N18-N29. Encadrer et intercaler les nombres <79. Placer sur une droite graduée", "domain": "Nombres", "link": null, "extra": null, "cells": {"33": {"v": "L", "c": "FF4682B4"}, "34": {"v": "M", "c": "FFF5DEB3"}, "35": {"v": "E1", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFBA55D3"}, "37": {"v": "E1", "c": "FFFFA500"}, "38": {"v": "E3", "c": "FFBA55D3"}, "40": {"v": "E2", "c": "FFFFA500"}, "41": {"v": "E4", "c": "FFBA55D3"}, "42": {"v": "Mission", "c": "FFDC143C"}, "45": {"v": "E3", "c": "FFFFA500"}, "47": {"v": "E5", "c": "FFBA55D3"}, "50": {"v": "E6", "c": "FFBA55D3"}, "54": {"v": "E4", "c": "FFFFA500"}, "58": {"v": "E7", "c": "FFBA55D3"}, "65": {"v": "E5", "c": "FFFFA500"}}}, {"title": "N20-N22. Connaître les différentes représentations d'un nombre", "domain": "Nombres", "link": null, "extra": null, "cells": {"34": {"v": "L", "c": "FF4682B4"}, "35": {"v": "M", "c": "FFF5DEB3"}, "36": {"v": "E1", "c": "FFBA55D3"}, "37": {"v": "E2", "c": "FFBA55D3"}, "38": {"v": "E1", "c": "FFFFA500"}, "39": {"v": "E3", "c": "FFBA55D3"}, "41": {"v": "E2", "c": "FFFFA500"}, "42": {"v": "E4", "c": "FFBA55D3"}, "43": {"v": "Mission", "c": "FFDC143C"}, "46": {"v": "E3", "c": "FFFFA500"}, "48": {"v": "E5", "c": "FFBA55D3"}, "51": {"v": "E6", "c": "FFBA55D3"}, "55": {"v": "E4", "c": "FFFFA500"}, "59": {"v": "E7", "c": "FFBA55D3"}, "66": {"v": "E5", "c": "FFFFA500"}}}, {"title": "N21-N28. Lire et écrire les nombres jusqu'à 99", "domain": "Mesures", "link": null, "extra": null, "cells": {"35": {"v": "L", "c": "FF4682B4"}, "36": {"v": "M", "c": "FFF5DEB3"}, "37": {"v": "E1", "c": "FFBA55D3"}, "38": {"v": "E2", "c": "FFBA55D3"}, "39": {"v": "E1", "c": "FFFFA500"}, "40": {"v": "E3", "c": "FFBA55D3"}, "42": {"v": "E2", "c": "FFFFA500"}, "43": {"v": "E4", "c": "FFBA55D3"}, "44": {"v": "Mission", "c": "FFDC143C"}, "47": {"v": "E3", "c": "FFFFA500"}, "49": {"v": "E5", "c": "FFBA55D3"}, "52": {"v": "E6", "c": "FFBA55D3"}, "56": {"v": "E4", "c": "FFFFA500"}, "60": {"v": "E7", "c": "FFBA55D3"}, "67": {"v": "E5", "c": "FFFFA500"}}}, {"title": "M10-M11. Construire des relations entre les unités de mesure ", "domain": "Géométrie", "link": null, "extra": null, "cells": {"36": {"v": "L", "c": "FF4682B4"}, "37": {"v": "M", "c": "FFF5DEB3"}, "38": {"v": "E1", "c": "FFBA55D3"}, "39": {"v": "E2", "c": "FFBA55D3"}, "40": {"v": "E1", "c": "FFFFA500"}, "41": {"v": "E3", "c": "FFBA55D3"}, "43": {"v": "E2", "c": "FFFFA500"}, "44": {"v": "E4", "c": "FFBA55D3"}, "45": {"v": "Mission", "c": "FFDC143C"}, "48": {"v": "E3", "c": "FFFFA500"}, "50": {"v": "E5", "c": "FFBA55D3"}, "53": {"v": "E6", "c": "FFBA55D3"}, "57": {"v": "E4", "c": "FFFFA500"}, "61": {"v": "E7", "c": "FFBA55D3"}, "68": {"v": "E5", "c": "FFFFA500"}}}, {"title": "G5-G6. Reconnaitre un solide. Décrire un cube, un pavé", "domain": "Géométrie", "link": null, "extra": null, "cells": {"37": {"v": "L", "c": "FF4682B4"}, "38": {"v": "M", "c": "FFF5DEB3"}, "39": {"v": "E1", "c": "FFBA55D3"}, "40": {"v": "E2", "c": "FFBA55D3"}, "41": {"v": "E1", "c": "FFFFA500"}, "42": {"v": "E3", "c": "FFBA55D3"}, "44": {"v": "E2", "c": "FFFFA500"}, "45": {"v": "E4", "c": "FFBA55D3"}, "46": {"v": "Mission", "c": "FFDC143C"}, "49": {"v": "E3", "c": "FFFFA500"}, "51": {"v": "E5", "c": "FFBA55D3"}, "54": {"v": "E6", "c": "FFBA55D3"}, "58": {"v": "E4", "c": "FFFFA500"}, "62": {"v": "E7", "c": "FFBA55D3"}, "69": {"v": "E5", "c": "FFFFA500"}}}, {"title": "G10. Reconnaître un alignement de points", "domain": "Nombres", "link": null, "extra": null, "cells": {"38": {"v": "L", "c": "FF4682B4"}, "39": {"v": "M", "c": "FFF5DEB3"}, "40": {"v": "E1", "c": "FFBA55D3"}, "41": {"v": "E2", "c": "FFBA55D3"}, "42": {"v": "E1", "c": "FFFFA500"}, "43": {"v": "E3", "c": "FFBA55D3"}, "44": {"v": "G", "c": null}, "45": {"v": "E2", "c": "FFFFA500"}, "46": {"v": "E4", "c": "FFBA55D3"}, "47": {"v": "Mission", "c": "FFDC143C"}, "50": {"v": "E3", "c": "FFFFA500"}, "52": {"v": "E5", "c": "FFBA55D3"}, "55": {"v": "E6", "c": "FFBA55D3"}, "59": {"v": "E4", "c": "FFFFA500"}, "63": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "N30. Le nombre 100", "domain": "Géométrie", "link": null, "extra": null, "cells": {"39": {"v": "L", "c": "FF4682B4"}, "40": {"v": "M", "c": "FFF5DEB3"}, "41": {"v": "E1", "c": "FFBA55D3"}, "42": {"v": "E2", "c": "FFBA55D3"}, "43": {"v": "E1", "c": "FFFFA500"}, "44": {"v": "E3", "c": "FFBA55D3"}, "46": {"v": "E2", "c": "FFFFA500"}, "47": {"v": "E4", "c": "FFBA55D3"}, "48": {"v": "Mission", "c": "FFDC143C"}, "51": {"v": "E3", "c": "FFFFA500"}, "53": {"v": "E5", "c": "FFBA55D3"}, "56": {"v": "E6", "c": "FFBA55D3"}, "60": {"v": "E4", "c": "FFFFA500"}, "64": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "G8. Reconnaitre les formes planes", "domain": "Nombres", "link": null, "extra": null, "cells": {"40": {"v": "L", "c": "FF4682B4"}, "41": {"v": "M", "c": "FFF5DEB3"}, "42": {"v": "E1", "c": "FFBA55D3"}, "43": {"v": "E2", "c": "FFBA55D3"}, "44": {"v": "E1", "c": "FFFFA500"}, "45": {"v": "E3", "c": "FFBA55D3"}, "47": {"v": "E2", "c": "FFFFA500"}, "48": {"v": "E4", "c": "FFBA55D3"}, "49": {"v": "Mission", "c": "FFDC143C"}, "52": {"v": "E3", "c": "FFFFA500"}, "54": {"v": "E5", "c": "FFBA55D3"}, "57": {"v": "E6", "c": "FFBA55D3"}, "61": {"v": "E4", "c": "FFFFA500"}, "65": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "N26-N27. Les suites organisées", "domain": "Géométrie", "link": null, "extra": null, "cells": {"41": {"v": "L", "c": "FF4682B4"}, "42": {"v": "M", "c": "FFF5DEB3"}, "43": {"v": "E1", "c": "FFBA55D3"}, "44": {"v": "E2", "c": "FFBA55D3"}, "45": {"v": "E1", "c": "FFFFA500"}, "46": {"v": "E3", "c": "FFBA55D3"}, "48": {"v": "E2", "c": "FFFFA500"}, "49": {"v": "E4", "c": "FFBA55D3"}, "50": {"v": "Mission", "c": "FFDC143C"}, "53": {"v": "E3", "c": "FFFFA500"}, "55": {"v": "E5", "c": "FFBA55D3"}, "58": {"v": "E6", "c": "FFBA55D3"}, "62": {"v": "E4", "c": "FFFFA500"}, "66": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "G9. Decrire les formes planes", "domain": "Mesures", "link": null, "extra": null, "cells": {"42": {"v": "L", "c": "FF4682B4"}, "43": {"v": "M", "c": "FFF5DEB3"}, "44": {"v": "E1", "c": "FFBA55D3"}, "45": {"v": "E2", "c": "FFBA55D3"}, "46": {"v": "E1", "c": "FFFFA500"}, "47": {"v": "E3", "c": "FFBA55D3"}, "49": {"v": "E2", "c": "FFFFA500"}, "50": {"v": "E4", "c": "FFBA55D3"}, "51": {"v": "Mission", "c": "FFDC143C"}, "54": {"v": "E3", "c": "FFFFA500"}, "56": {"v": "E5", "c": "FFBA55D3"}, "59": {"v": "E6", "c": "FFBA55D3"}, "63": {"v": "E4", "c": "FFFFA500"}, "67": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "M13. Lire des heures entières", "domain": "Géométrie", "link": null, "extra": null, "cells": {"43": {"v": "L", "c": "FF4682B4"}, "44": {"v": "M", "c": "FFF5DEB3"}, "45": {"v": "E1", "c": "FFBA55D3"}, "46": {"v": "E2", "c": "FFBA55D3"}, "47": {"v": "E1", "c": "FFFFA500"}, "48": {"v": "E3", "c": "FFBA55D3"}, "50": {"v": "E2", "c": "FFFFA500"}, "51": {"v": "E4", "c": "FFBA55D3"}, "52": {"v": "Mission", "c": "FFDC143C"}, "55": {"v": "E3", "c": "FFFFA500"}, "57": {"v": "E5", "c": "FFBA55D3"}, "60": {"v": "E6", "c": "FFBA55D3"}, "64": {"v": "E4", "c": "FFFFA500"}, "68": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "G11. Tracer à la règle", "domain": "Géométrie", "link": null, "extra": null, "cells": {"44": {"v": "L", "c": "FF4682B4"}, "45": {"v": "M", "c": "FFF5DEB3"}, "46": {"v": "E1", "c": "FFBA55D3"}, "47": {"v": "E2", "c": "FFBA55D3"}, "48": {"v": "E1", "c": "FFFFA500"}, "49": {"v": "E3", "c": "FFBA55D3"}, "51": {"v": "E2", "c": "FFFFA500"}, "52": {"v": "E4", "c": "FFBA55D3"}, "53": {"v": "Mission", "c": "FFDC143C"}, "56": {"v": "E3", "c": "FFFFA500"}, "58": {"v": "E5", "c": "FFBA55D3"}, "61": {"v": "E6", "c": "FFBA55D3"}, "65": {"v": "E4", "c": "FFFFA500"}, "69": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "G12. Construire un triangle, un rectangle, un carré", "domain": "Géométrie", "link": null, "extra": null, "cells": {"45": {"v": "L", "c": "FF4682B4"}, "46": {"v": "M", "c": "FFF5DEB3"}, "47": {"v": "E1", "c": "FFBA55D3"}, "48": {"v": "E2", "c": "FFBA55D3"}, "49": {"v": "E1", "c": "FFFFA500"}, "50": {"v": "E3", "c": "FFBA55D3"}, "52": {"v": "E2", "c": "FFFFA500"}, "53": {"v": "E4", "c": "FFBA55D3"}, "54": {"v": "Mission", "c": "FFDC143C"}, "57": {"v": "E3", "c": "FFFFA500"}, "59": {"v": "E5", "c": "FFBA55D3"}, "62": {"v": "E6", "c": "FFBA55D3"}, "66": {"v": "E4", "c": "FFFFA500"}}}, {"title": "G13-G14. Construire un assemblage de figures planes", "domain": null, "link": null, "extra": null, "cells": {"46": {"v": "L", "c": "FF4682B4"}, "47": {"v": "M", "c": "FFF5DEB3"}, "48": {"v": "E1", "c": "FFBA55D3"}, "49": {"v": "E2", "c": "FFBA55D3"}, "50": {"v": "E1", "c": "FFFFA500"}, "51": {"v": "E3", "c": "FFBA55D3"}, "53": {"v": "E2", "c": "FFFFA500"}, "54": {"v": "E4", "c": "FFBA55D3"}, "55": {"v": "Mission", "c": "FFDC143C"}, "58": {"v": "E3", "c": "FFFFA500"}, "60": {"v": "E5", "c": "FFBA55D3"}, "63": {"v": "E6", "c": "FFBA55D3"}, "67": {"v": "E4", "c": "FFFFA500"}}}, {"title": "OGD1. Collecter et représenter des données", "domain": null, "link": null, "extra": null, "cells": {"47": {"v": "L", "c": "FF4682B4"}, "48": {"v": "M", "c": "FFF5DEB3"}, "49": {"v": "E1", "c": "FFBA55D3"}, "50": {"v": "E2", "c": "FFBA55D3"}, "51": {"v": "E1", "c": "FFFFA500"}, "52": {"v": "E3", "c": "FFBA55D3"}, "54": {"v": "E2", "c": "FFFFA500"}, "55": {"v": "E4", "c": "FFBA55D3"}, "56": {"v": "Mission", "c": "FFDC143C"}, "59": {"v": "E3", "c": "FFFFA500"}, "61": {"v": "E5", "c": "FFBA55D3"}, "64": {"v": "E6", "c": "FFBA55D3"}, "68": {"v": "E4", "c": "FFFFA500"}}}, {"title": "OGD2. Construire un tableau à double entrée", "domain": null, "link": null, "extra": null, "cells": {"48": {"v": "L", "c": "FF4682B4"}, "49": {"v": "M", "c": "FFF5DEB3"}, "50": {"v": "E1", "c": "FFBA55D3"}, "51": {"v": "E2", "c": "FFBA55D3"}, "52": {"v": "E1", "c": "FFFFA500"}, "53": {"v": "E3", "c": "FFBA55D3"}, "55": {"v": "E2", "c": "FFFFA500"}, "56": {"v": "E4", "c": "FFBA55D3"}, "57": {"v": "Mission", "c": "FFDC143C"}, "60": {"v": "E3", "c": "FFFFA500"}, "62": {"v": "E5", "c": "FFBA55D3"}, "65": {"v": "E6", "c": "FFBA55D3"}, "69": {"v": "E4", "c": "FFFFA500"}}}]}, "EDL": {"date_cols": {"3": "2026-09-04", "4": "2026-09-07", "5": "2026-09-08", "6": "2026-09-14", "7": "2026-09-15", "8": "2026-09-21", "9": "2026-09-22", "10": "2026-09-28", "11": "2026-09-29", "12": "2026-10-05", "13": "2026-10-06", "14": "2026-11-02", "15": "2026-11-03", "16": "2026-11-09", "17": "2026-11-10", "18": "2026-11-16", "19": "2026-11-17", "20": "2026-11-23", "21": "2026-11-24", "22": "2026-11-30", "23": "2026-12-01", "24": "2026-12-07", "25": "2026-12-08", "26": "2027-01-04", "27": "2027-01-05", "28": "2027-01-11", "29": "2027-01-12", "30": "2027-01-18", "31": "2027-01-19", "32": "2027-01-25", "33": "2027-01-26", "34": "2027-02-01", "35": "2027-02-02", "36": "2027-02-08", "37": "2027-02-09", "38": "2027-03-08", "39": "2027-03-09", "40": "2027-03-15", "41": "2027-03-16", "42": "2027-03-22", "43": "2027-03-23", "44": "2027-03-29", "45": "2027-03-30", "46": "2027-04-05", "47": "2027-04-06", "48": "2027-05-03", "49": "2027-05-04", "50": "2027-05-10", "51": "2027-05-11", "52": "2027-05-18", "53": "2027-05-24", "54": "2027-05-25", "55": "2027-05-31", "56": "2027-06-01", "57": "2027-06-07", "58": "2027-06-08", "59": "2027-06-14", "60": "2027-06-15", "61": "2027-06-21", "62": "2027-06-22", "63": "2027-06-28", "64": "2027-06-29", "65": "2027-07-05", "66": "2027-07-06", "67": "2027-07-12", "68": "2027-07-13"}, "rows": []}, "Anglais": {"date_cols": {"3": "2026-09-07", "4": "2026-09-14", "5": "2026-09-21", "6": "2026-09-28", "7": "2026-10-05", "8": "2026-10-12", "9": "2026-10-19", "10": "2026-11-09", "11": "2026-11-16", "12": "2026-11-23", "13": "2026-11-30", "14": "2026-12-07", "15": "2026-12-14", "16": "2026-12-21", "17": "2027-01-11", "18": "2027-01-18", "19": "2027-01-25", "20": "2027-02-01", "21": "2027-02-08", "22": "2027-02-15", "23": "2027-02-22", "24": "2027-03-15", "25": "2027-03-22", "26": "2027-03-29", "27": "2027-04-05", "28": "2027-04-12", "29": "2027-04-19", "30": "2027-04-26", "31": "2027-05-17", "32": "2027-05-24", "33": "2027-05-31", "34": "2027-06-07", "35": "2027-06-14", "36": "2027-06-21", "37": "2027-06-28", "38": "2027-07-05"}, "rows": [{"title": "1-1 Hello Goodnight Mum Dad", "domain": "Séquence 1 \nI'm Ghostie", "link": "https://ladigitale.dev/digibunch/#/b/ed111b9b2bf215f0", "extra": null, "cells": {"3": {"v": "L", "c": "FF4682B4"}, "4": {"v": "M", "c": "FFF5DEB3"}, "5": {"v": "E1", "c": "FFBA55D3"}, "6": {"v": "E2", "c": "FFBA55D3"}, "7": {"v": "E1", "c": "FFFFA500"}, "8": {"v": "E3", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFFFA500"}, "11": {"v": "E4", "c": "FFBA55D3"}, "12": {"v": "Mission", "c": "FFDC143C"}, "15": {"v": "E3", "c": "FFFFA500"}, "17": {"v": "E5", "c": "FFBA55D3"}, "20": {"v": "E6", "c": "FFBA55D3"}, "24": {"v": "E4", "c": "FFFFA500"}, "28": {"v": "E7", "c": "FFBA55D3"}, "35": {"v": "E5", "c": "FFFFA500"}}}, {"title": "1-2 Good morning, Hello !", "domain": null, "link": "https://ladigitale.dev/digibunch/#/b/e5c6eea66a18802a", "extra": null, "cells": {"4": {"v": "L", "c": "FF4682B4"}, "5": {"v": "M", "c": "FFF5DEB3"}, "6": {"v": "E1", "c": "FFBA55D3"}, "7": {"v": "E2", "c": "FFBA55D3"}, "8": {"v": "E1", "c": "FFFFA500"}, "9": {"v": "E3", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFFFA500"}, "12": {"v": "E4", "c": "FFBA55D3"}, "13": {"v": "Mission", "c": "FFDC143C"}, "16": {"v": "E3", "c": "FFFFA500"}, "18": {"v": "E5", "c": "FFBA55D3"}, "21": {"v": "E6", "c": "FFBA55D3"}, "25": {"v": "E4", "c": "FFFFA500"}, "29": {"v": "E7", "c": "FFBA55D3"}, "36": {"v": "E5", "c": "FFFFA500"}}}, {"title": "1-3 Who are you ?", "domain": null, "link": "https://ladigitale.dev/digibunch/#/b/117c6e461fcd3563", "extra": null, "cells": {"5": {"v": "L", "c": "FF4682B4"}, "6": {"v": "M", "c": "FFF5DEB3"}, "7": {"v": "E1", "c": "FFBA55D3"}, "8": {"v": "E2", "c": "FFBA55D3"}, "9": {"v": "E1", "c": "FFFFA500"}, "10": {"v": "E3", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFFFA500"}, "13": {"v": "E4", "c": "FFBA55D3"}, "14": {"v": "Mission", "c": "FFDC143C"}, "17": {"v": "E3", "c": "FFFFA500"}, "19": {"v": "E5", "c": "FFBA55D3"}, "22": {"v": "E6", "c": "FFBA55D3"}, "26": {"v": "E4", "c": "FFFFA500"}, "30": {"v": "E7", "c": "FFBA55D3"}, "37": {"v": "E5", "c": "FFFFA500"}}}, {"title": "1-4 I'm your friend", "domain": null, "link": "https://ladigitale.dev/digibunch/#/b/491fd99ef8d361f7", "extra": null, "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}, "38": {"v": "E5", "c": "FFFFA500"}}}, {"title": "2-1 One to 7 big conkers", "domain": "Séquence 2\nLet's play conkers", "link": "https://ladigitale.dev/digibunch/#/b/8e009b75941625d5", "extra": null, "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2-2 Let's play Conkers 1+3", "domain": null, "link": "https://ladigitale.dev/digibunch/#/b/a50311279c41fe50", "extra": null, "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "2-3 Yes!Excellent!No! Try again", "domain": null, "link": null, "extra": null, "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "3-1 Red blue green yellow", "domain": "Séquence 3\nLet's play Ludo !", "link": null, "extra": null, "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "35": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "3-2 My favourite colour", "domain": null, "link": null, "extra": null, "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}, "36": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "3-3 Go go go", "domain": null, "link": null, "extra": null, "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}, "37": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "5-1 Santa", "domain": "Séquence 5\nSanta comes at Christmas", "link": null, "extra": null, "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}, "38": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "5-2 We wish you a merry christmas", "domain": null, "link": null, "extra": null, "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E4", "c": "FFFFA500"}}}, {"title": "5-3 Santa comes at Christmas", "domain": null, "link": null, "extra": null, "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E4", "c": "FFFFA500"}}}, {"title": "5-4 Christmas", "domain": null, "link": null, "extra": null, "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}, "37": {"v": "E4", "c": "FFFFA500"}}}, {"title": "4-1 Well done", "domain": "Séquence 4\nLet's play Simon Says !", "link": null, "extra": null, "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}, "38": {"v": "E4", "c": "FFFFA500"}}}, {"title": "4-2 What did you say ?", "domain": null, "link": null, "extra": null, "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "4-3 Phonologie", "domain": null, "link": null, "extra": null, "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}, "36": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "6-1 Look! Fruit !", "domain": "Séquence 6\nLet's make a Fruit salad !", "link": null, "extra": null, "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}, "37": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "6-2 Phonologie", "domain": null, "link": null, "extra": null, "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}, "38": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "6-3 Les's make a fruit salad !", "domain": null, "link": null, "extra": null, "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}, "36": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "7-1 Animals", "domain": "Séquence 7\nThe Animal's Portrait Gallery", "link": null, "extra": null, "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E3", "c": "FFFFA500"}, "37": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "7-2 Have you got a dog ?", "domain": null, "link": null, "extra": null, "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}, "36": {"v": "E3", "c": "FFFFA500"}, "38": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "7-3 Kids'animals", "domain": null, "link": null, "extra": null, "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}, "37": {"v": "E3", "c": "FFFFA500"}}}, {"title": "7-4 Animals, kids'animals", "domain": null, "link": null, "extra": null, "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}, "35": {"v": "Mission", "c": "FFDC143C"}, "38": {"v": "E3", "c": "FFFFA500"}}}, {"title": "8-1 The school Picnic", "domain": "Séquence 8\nThe school picnic", "link": null, "extra": null, "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}, "35": {"v": "E4", "c": "FFBA55D3"}, "36": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "8-2 What have you got ?", "domain": null, "link": null, "extra": null, "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFFFA500"}, "36": {"v": "E4", "c": "FFBA55D3"}, "37": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "8-3 The food train", "domain": null, "link": null, "extra": null, "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFFFA500"}, "37": {"v": "E4", "c": "FFBA55D3"}, "38": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "9-1 Ghosties's got a family", "domain": "Séquence 9\nGhostie'a got a family", "link": null, "extra": null, "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFBA55D3"}, "34": {"v": "E1", "c": "FFFFA500"}, "35": {"v": "E3", "c": "FFBA55D3"}, "37": {"v": "E2", "c": "FFFFA500"}, "38": {"v": "E4", "c": "FFBA55D3"}}}, {"title": "9-2 The family song", "domain": null, "link": null, "extra": null, "cells": {"31": {"v": "L", "c": "FF4682B4"}, "32": {"v": "M", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFBA55D3"}, "35": {"v": "E1", "c": "FFFFA500"}, "36": {"v": "E3", "c": "FFBA55D3"}, "38": {"v": "E2", "c": "FFFFA500"}}}, {"title": "9-3 Who's missing in my family ?", "domain": null, "link": null, "extra": null, "cells": {"32": {"v": "L", "c": "FF4682B4"}, "33": {"v": "M", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFBA55D3"}, "36": {"v": "E1", "c": "FFFFA500"}, "37": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "9-4 The snakes and Ladders Song", "domain": null, "link": null, "extra": null, "cells": {"33": {"v": "L", "c": "FF4682B4"}, "34": {"v": "M", "c": "FFF5DEB3"}, "35": {"v": "E1", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFBA55D3"}, "37": {"v": "E1", "c": "FFFFA500"}, "38": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "9-1 Let's mime", "domain": "Séquence 10\nThe enormous Potato Pie", "link": null, "extra": null, "cells": {"34": {"v": "L", "c": "FF4682B4"}, "35": {"v": "M", "c": "FFF5DEB3"}, "36": {"v": "E1", "c": "FFBA55D3"}, "37": {"v": "E2", "c": "FFBA55D3"}, "38": {"v": "E1", "c": "FFFFA500"}}}, {"title": "9-2 Heave ho !", "domain": null, "link": null, "extra": null, "cells": {"35": {"v": "L", "c": "FF4682B4"}, "36": {"v": "M", "c": "FFF5DEB3"}, "37": {"v": "E1", "c": "FFBA55D3"}, "38": {"v": "E2", "c": "FFBA55D3"}}}]}, "HGScEmcEvar": {"date_cols": {"6": "2026-08-31", "7": "2026-09-07", "8": "2026-09-14", "9": "2026-09-21", "10": "2026-09-28", "11": "2026-10-05", "12": "2026-11-02", "13": "2026-11-09", "14": "2026-11-16", "15": "2026-11-23", "16": "2026-11-30", "17": "2026-12-07", "18": "2027-01-04", "19": "2027-01-11", "20": "2027-01-18", "21": "2027-01-25", "22": "2027-02-01", "23": "2027-02-08", "24": "2027-03-08", "25": "2027-03-15", "26": "2027-03-22", "27": "2027-03-29", "28": "2027-04-05", "29": "2027-05-03", "30": "2027-05-10", "31": "2027-05-17", "32": "2027-05-24", "33": "2027-05-31", "34": "2027-06-07", "35": "2027-06-14"}, "rows": [{"title": "Thème", "domain": "Savoir", "link": null, "extra": "Savoir-faire", "cells": {"6": {"v": "S1", "c": null}, "7": {"v": "S2", "c": null}, "8": {"v": "S3", "c": null}, "9": {"v": "S4", "c": null}, "10": {"v": "S5", "c": null}, "11": {"v": "S6", "c": null}, "12": {"v": "S7", "c": null}, "13": {"v": "S8", "c": null}, "14": {"v": "S9", "c": null}, "15": {"v": "S10", "c": null}, "16": {"v": "S11", "c": null}, "17": {"v": "S12", "c": null}, "18": {"v": "S13", "c": null}, "19": {"v": "S14", "c": null}, "20": {"v": "S15", "c": null}, "21": {"v": "S16", "c": null}, "22": {"v": "S17", "c": null}, "23": {"v": "S18", "c": null}, "24": {"v": "S19", "c": null}, "25": {"v": "S20", "c": null}, "26": {"v": "S21", "c": null}, "27": {"v": "S22", "c": null}, "28": {"v": "S23", "c": null}, "29": {"v": "S24", "c": null}, "30": {"v": "S25", "c": null}, "31": {"v": "S26", "c": null}, "32": {"v": "S27", "c": null}, "33": {"v": "S28", "c": null}, "34": {"v": "S29", "c": null}, "35": {"v": "S30", "c": null}}}, {"title": "Vivre ensemble : les règles à l'école", "domain": "Les règles permettent de vivre ensemble", "link": "https://www.reseau-canope.fr/cap-ecole-inclusive/amenager-et-adapter/fiche-adaptation/regles-et-codes-du-vivre-ensemble.html", "extra": "Respecter une règle commune", "cells": {"6": {"v": "L", "c": "FF4682B4"}, "7": {"v": "M", "c": "FFF5DEB3"}, "8": {"v": "E1", "c": "FFBA55D3"}, "9": {"v": "E2", "c": "FFBA55D3"}, "10": {"v": "E1", "c": "FFFFA500"}, "11": {"v": "E3", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFFFA500"}, "14": {"v": "E4", "c": "FFBA55D3"}, "15": {"v": "Mission", "c": "FFDC143C"}, "18": {"v": "E3", "c": "FFFFA500"}, "20": {"v": "E5", "c": "FFBA55D3"}, "23": {"v": "E6", "c": "FFBA55D3"}, "27": {"v": "E4", "c": "FFFFA500"}, "31": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Se repérer dans la classe", "domain": "La classe est un espace organisé", "link": null, "extra": "Se repérer dans la  classe", "cells": {"7": {"v": "L", "c": "FF4682B4"}, "8": {"v": "M", "c": "FFF5DEB3"}, "9": {"v": "E1", "c": "FFBA55D3"}, "10": {"v": "E2", "c": "FFBA55D3"}, "11": {"v": "E1", "c": "FFFFA500"}, "12": {"v": "E3", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFFFA500"}, "15": {"v": "E4", "c": "FFBA55D3"}, "16": {"v": "Mission", "c": "FFDC143C"}, "19": {"v": "E3", "c": "FFFFA500"}, "21": {"v": "E5", "c": "FFBA55D3"}, "24": {"v": "E6", "c": "FFBA55D3"}, "28": {"v": "E4", "c": "FFFFA500"}, "32": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Vivre ensemble : respecter autrui", "domain": "Les étapes de la gestion de conflits", "link": null, "extra": "Comment se faire des amis ? respecter l'autre ?", "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Organiser sa journée, son année", "domain": "Une journée/une année est organisée dans le temps", "link": null, "extra": "Ordonner les moments de la journée", "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Elève de la République : délégué, symboles ", "domain": "Choisir un délégué, symboles de la république", "link": null, "extra": "Comment choisir son délégué ?", "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "35": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Vivre ensemble : les émotions", "domain": "Les émotions existent chez chacun", "link": null, "extra": "Identifier une émotion", "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Organiser sa semaine", "domain": "Une semaine comporte sept jours", "link": null, "extra": "Utiliser un calendrier simple", "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Grandir : mon corps change", "domain": "Le corps grandit et change", "link": null, "extra": "Comparer différents âges de la vie", "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Grandir : mes besoins", "domain": "Dormir, manger et bouger permettent de rester en bonne santé", "link": null, "extra": "Identifier une habitude favorable à la santé", "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Les différents matériaux", "domain": "Le bois, le métal, le plastique, le verre est un matériau", "link": null, "extra": "Reconnaître le bois, le métal, le plastique et le verre", "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Vivre ensemble : la coopération en classe", "domain": "On peut coopérer pour réussir ensemble", "link": null, "extra": "Travailler/tutorer avec un camarade", "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Se repérer dans l'école", "domain": "L'école est un espace organisé", "link": null, "extra": "Se repérer dans l'école", "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Organiser sa journée", "domain": "Il existe un passé, un présent et un futur", "link": null, "extra": "Situer avant / maintenant / après", "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Le vivant", "domain": "Les êtres vivants naissent, grandissent et meurent", "link": null, "extra": "Classer vivant / non vivant", "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Se connaître : mon corps m'appartient", "domain": "Mon corps m'appartient", "link": null, "extra": "Nommer les principales parties du corps", "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Habiter un quartier", "domain": "J'habite un quartier", "link": null, "extra": "Décrire son lieu de vie", "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Se repérer dans le temps : journée, mois, saison, année", "domain": "Passé, présent, futur, journée, mois, saisons, année", "link": null, "extra": "Situer avant / maintenant / après", "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}}}, {"title": "Le vivant", "domain": "Les plantes ont des besoins", "link": null, "extra": "Identifier les besoins d'une plante", "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E3", "c": "FFFFA500"}}}, {"title": "Les différents matériaux et les objets", "domain": "Le bois, le métal, le plastique, le verre est un matériau", "link": null, "extra": "Reconnaître le bois, le métal, le plastique et le verre", "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Comprendre l'organisation de mon quartier", "domain": "Les lieux/ les transports ont des fonctions différentes", "link": null, "extra": "Identifier la fonction d'un lieu", "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Le monde change", "domain": "Les objets changent au fil du temps", "link": null, "extra": "Comparer ancien et actuel", "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}, "35": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Grandir", "domain": "Le corps grandit et change", "link": null, "extra": "Comparer différents âges de la vie", "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}, "35": {"v": "E4", "c": "FFBA55D3"}}}, {"title": "Le vivant", "domain": "Les animaux ont des besoins", "link": null, "extra": "Identifier les besoins d'un animal", "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFFFA500"}}}, {"title": "Observer la matière", "domain": "L'eau peut être liquide ou solide", "link": null, "extra": "Distinguer solide et liquide", "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "Observer la matière", "domain": "L'air existe même s'il est invisible", "link": null, "extra": "Réaliser une expérience sur l'air", "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFBA55D3"}, "34": {"v": "E1", "c": "FFFFA500"}, "35": {"v": "E3", "c": "FFBA55D3"}}}]}, "Ed° musicale": {"date_cols": {"8": "2026-09-07", "9": "2026-09-14", "10": "2026-09-21", "11": "2026-09-28", "12": "2026-10-05", "13": "2026-10-12", "14": "2026-11-02", "15": "2026-11-09", "16": "2026-11-16", "17": "2026-11-23", "18": "2026-11-30", "19": "2026-12-07", "20": "2026-12-14", "21": "2027-01-04", "22": "2027-01-11", "23": "2027-01-18", "24": "2027-01-25", "25": "2027-02-01", "26": "2027-02-08", "27": "2027-03-01", "28": "2027-03-08", "29": "2027-03-15", "30": "2027-03-22", "31": "2027-03-29", "32": "2027-04-05", "33": "2027-04-12", "34": "2027-04-19", "35": "2027-04-26", "36": "2027-05-03", "37": "2027-05-10"}, "rows": [{"title": "Chanter une comptine connue", "domain": "Chanter une comptine connue", "link": null, "extra": "La voix est un instrument", "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Chanter une comptine connue", "domain": "Chanter une comptine connue", "link": null, "extra": "La voix est un instrument", "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Reproduire un rythme simple", "domain": "Reproduire un rythme simple", "link": null, "extra": "Le corps produit des sons", "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "35": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Reproduire un rythme simple", "domain": "Reproduire un rythme simple", "link": null, "extra": "Le corps produit des sons", "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}, "36": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Reconnaître des sons familiers", "domain": "Reconnaître des sons familiers", "link": null, "extra": "Les sons ont des caractéristiques", "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}, "37": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Reconnaître des sons familiers", "domain": "Reconnaître des sons familiers", "link": null, "extra": "Les sons ont des caractéristiques", "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Chanter en groupe", "domain": "Chanter en groupe", "link": null, "extra": "Chanter ensemble nécessite l'écoute des autres", "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Chanter en groupe", "domain": "Chanter en groupe", "link": null, "extra": "Chanter ensemble nécessite l'écoute des autres", "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Participer à une répétition", "domain": "Participer à une répétition", "link": null, "extra": "Une représentation se prépare", "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}, "37": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Participer à une répétition", "domain": "Participer à une répétition", "link": null, "extra": "Une représentation se prépare", "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Participer à une répétition", "domain": "Participer à une répétition", "link": null, "extra": "Une représentation se prépare", "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Participer à une répétition", "domain": "Participer à une répétition", "link": null, "extra": "Une représentation se prépare", "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}, "36": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Participer à une répétition", "domain": "Participer à une répétition", "link": null, "extra": "Une représentation se prépare", "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}, "37": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Reconnaître quelques instruments", "domain": "Reconnaître quelques instruments", "link": null, "extra": "Les instruments appartiennent à différentes familles", "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Reconnaître quelques instruments", "domain": "Reconnaître quelques instruments", "link": null, "extra": "Les instruments appartiennent à différentes familles", "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}, "36": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Différencier fort et doux", "domain": "Différencier fort et doux", "link": null, "extra": "La musique utilise des nuances", "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E3", "c": "FFFFA500"}, "37": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Différencier fort et doux", "domain": "Différencier fort et doux", "link": null, "extra": "La musique utilise des nuances", "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}, "36": {"v": "E3", "c": "FFFFA500"}}}, {"title": "Associer émotion et musique", "domain": "Associer émotion et musique", "link": null, "extra": "La musique exprime des émotions", "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}, "37": {"v": "E3", "c": "FFFFA500"}}}, {"title": "Associer émotion et musique", "domain": "Associer émotion et musique", "link": null, "extra": "La musique exprime des émotions", "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}, "35": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Reconnaître des environnements sonores", "domain": "Reconnaître des environnements sonores", "link": null, "extra": "Les sons peuvent représenter un lieu", "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}, "35": {"v": "E4", "c": "FFBA55D3"}, "36": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Reconnaître des environnements sonores", "domain": "Reconnaître des environnements sonores", "link": null, "extra": "Les sons peuvent représenter un lieu", "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFFFA500"}, "36": {"v": "E4", "c": "FFBA55D3"}, "37": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Explorer des objets sonores", "domain": "Explorer des objets sonores", "link": null, "extra": "On peut produire des sons de différentes façons", "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFFFA500"}, "37": {"v": "E4", "c": "FFBA55D3"}}}, {"title": "Explorer des objets sonores", "domain": "Explorer des objets sonores", "link": null, "extra": "On peut produire des sons de différentes façons", "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFBA55D3"}, "34": {"v": "E1", "c": "FFFFA500"}, "35": {"v": "E3", "c": "FFBA55D3"}, "37": {"v": "E2", "c": "FFFFA500"}}}, {"title": "Participer à une répétition", "domain": "Participer à une répétition", "link": null, "extra": "Une représentation se prépare", "cells": {"31": {"v": "L", "c": "FF4682B4"}, "32": {"v": "M", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFBA55D3"}, "35": {"v": "E1", "c": "FFFFA500"}, "36": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "Participer à une répétition", "domain": "Participer à une répétition", "link": null, "extra": "Une représentation se prépare", "cells": {"32": {"v": "L", "c": "FF4682B4"}, "33": {"v": "M", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFBA55D3"}, "36": {"v": "E1", "c": "FFFFA500"}, "37": {"v": "E3", "c": "FFBA55D3"}}}]}, "Art": {"date_cols": {"8": "2026-08-31", "9": "2026-09-07", "10": "2026-09-14", "11": "2026-09-28", "12": "2026-10-05", "13": "2026-11-02", "14": "2026-11-09", "15": "2026-11-16", "16": "2026-11-23", "17": "2026-12-07", "18": "2027-01-04", "19": "2027-01-11", "20": "2027-01-18", "21": "2027-01-25", "22": "2027-02-01", "23": "2027-02-08", "24": "2027-03-08", "25": "2027-03-15", "26": "2027-03-22", "27": "2027-03-29", "28": "2027-04-05", "29": "2027-05-03", "30": "2027-05-10", "31": "2027-05-17", "32": "2027-05-24", "33": "2027-05-31", "34": "2027-06-07", "35": "2027-06-14", "36": "2027-06-21"}, "rows": [{"title": "Colorier", "domain": null, "link": null, "extra": null, "cells": {"8": {"v": "L", "c": "FF4682B4"}, "9": {"v": "M", "c": "FFF5DEB3"}, "10": {"v": "E1", "c": "FFBA55D3"}, "11": {"v": "E2", "c": "FFBA55D3"}, "12": {"v": "E1", "c": "FFFFA500"}, "13": {"v": "E3", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFFFA500"}, "16": {"v": "E4", "c": "FFBA55D3"}, "17": {"v": "Mission", "c": "FFDC143C"}, "20": {"v": "E3", "c": "FFFFA500"}, "22": {"v": "E5", "c": "FFBA55D3"}, "25": {"v": "E6", "c": "FFBA55D3"}, "29": {"v": "E4", "c": "FFFFA500"}, "33": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"9": {"v": "L", "c": "FF4682B4"}, "10": {"v": "M", "c": "FFF5DEB3"}, "11": {"v": "E1", "c": "FFBA55D3"}, "12": {"v": "E2", "c": "FFBA55D3"}, "13": {"v": "E1", "c": "FFFFA500"}, "14": {"v": "E3", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFFFA500"}, "17": {"v": "E4", "c": "FFBA55D3"}, "18": {"v": "Mission", "c": "FFDC143C"}, "21": {"v": "E3", "c": "FFFFA500"}, "23": {"v": "E5", "c": "FFBA55D3"}, "26": {"v": "E6", "c": "FFBA55D3"}, "30": {"v": "E4", "c": "FFFFA500"}, "34": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "La ligne", "domain": "Tracer différentes lignes", "link": "https://tourcouleurs.canalblog.com/main-tag/couleurs_primaires", "extra": "Les artistes utilisent lignes et formes pour créer Mondrian", "cells": {"10": {"v": "L", "c": "FF4682B4"}, "11": {"v": "M", "c": "FFF5DEB3"}, "12": {"v": "E1", "c": "FFBA55D3"}, "13": {"v": "E2", "c": "FFBA55D3"}, "14": {"v": "E1", "c": "FFFFA500"}, "15": {"v": "E3", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFFFA500"}, "18": {"v": "E4", "c": "FFBA55D3"}, "19": {"v": "Mission", "c": "FFDC143C"}, "22": {"v": "E3", "c": "FFFFA500"}, "24": {"v": "E5", "c": "FFBA55D3"}, "27": {"v": "E6", "c": "FFBA55D3"}, "31": {"v": "E4", "c": "FFFFA500"}, "35": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "La couleur ", "domain": "Nommer les couleurs connues", "link": "https://www.mamansurlefil.fr/2023/11/08/tableau-recup-a-la-facon-de-mondrian-activite/", "extra": "Les couleurs primaires permettent de créer d'autres couleurs pop art ", "cells": {"11": {"v": "L", "c": "FF4682B4"}, "12": {"v": "M", "c": "FFF5DEB3"}, "13": {"v": "E1", "c": "FFBA55D3"}, "14": {"v": "E2", "c": "FFBA55D3"}, "15": {"v": "E1", "c": "FFFFA500"}, "16": {"v": "E3", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFFFA500"}, "19": {"v": "E4", "c": "FFBA55D3"}, "20": {"v": "Mission", "c": "FFDC143C"}, "23": {"v": "E3", "c": "FFFFA500"}, "25": {"v": "E5", "c": "FFBA55D3"}, "28": {"v": "E6", "c": "FFBA55D3"}, "32": {"v": "E4", "c": "FFFFA500"}, "36": {"v": "E7", "c": "FFBA55D3"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"12": {"v": "L", "c": "FF4682B4"}, "13": {"v": "M", "c": "FFF5DEB3"}, "14": {"v": "E1", "c": "FFBA55D3"}, "15": {"v": "E2", "c": "FFBA55D3"}, "16": {"v": "E1", "c": "FFFFA500"}, "17": {"v": "E3", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFFFA500"}, "20": {"v": "E4", "c": "FFBA55D3"}, "21": {"v": "Mission", "c": "FFDC143C"}, "24": {"v": "E3", "c": "FFFFA500"}, "26": {"v": "E5", "c": "FFBA55D3"}, "29": {"v": "E6", "c": "FFBA55D3"}, "33": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Nuancer la couleur ", "domain": "Nommer les couleurs connues", "link": null, "extra": "Les couleurs primaires permettent de créer d'autres couleurs", "cells": {"13": {"v": "L", "c": "FF4682B4"}, "14": {"v": "M", "c": "FFF5DEB3"}, "15": {"v": "E1", "c": "FFBA55D3"}, "16": {"v": "E2", "c": "FFBA55D3"}, "17": {"v": "E1", "c": "FFFFA500"}, "18": {"v": "E3", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFFFA500"}, "21": {"v": "E4", "c": "FFBA55D3"}, "22": {"v": "Mission", "c": "FFDC143C"}, "25": {"v": "E3", "c": "FFFFA500"}, "27": {"v": "E5", "c": "FFBA55D3"}, "30": {"v": "E6", "c": "FFBA55D3"}, "34": {"v": "E4", "c": "FFFFA500"}}}, {"title": "L'espace : occuper, distribuer", "domain": "Tracer différentes lignes", "link": null, "extra": "Les artistes utilisent lignes et formes pour créer", "cells": {"14": {"v": "L", "c": "FF4682B4"}, "15": {"v": "M", "c": "FFF5DEB3"}, "16": {"v": "E1", "c": "FFBA55D3"}, "17": {"v": "E2", "c": "FFBA55D3"}, "18": {"v": "E1", "c": "FFFFA500"}, "19": {"v": "E3", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFFFA500"}, "22": {"v": "E4", "c": "FFBA55D3"}, "23": {"v": "Mission", "c": "FFDC143C"}, "26": {"v": "E3", "c": "FFFFA500"}, "28": {"v": "E5", "c": "FFBA55D3"}, "31": {"v": "E6", "c": "FFBA55D3"}, "35": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"15": {"v": "L", "c": "FF4682B4"}, "16": {"v": "M", "c": "FFF5DEB3"}, "17": {"v": "E1", "c": "FFBA55D3"}, "18": {"v": "E2", "c": "FFBA55D3"}, "19": {"v": "E1", "c": "FFFFA500"}, "20": {"v": "E3", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFFFA500"}, "23": {"v": "E4", "c": "FFBA55D3"}, "24": {"v": "Mission", "c": "FFDC143C"}, "27": {"v": "E3", "c": "FFFFA500"}, "29": {"v": "E5", "c": "FFBA55D3"}, "32": {"v": "E6", "c": "FFBA55D3"}, "36": {"v": "E4", "c": "FFFFA500"}}}, {"title": "Différents matériaux", "domain": "Identifier différentes textures", "link": null, "extra": "Les matériaux produisent des effets différents", "cells": {"16": {"v": "L", "c": "FF4682B4"}, "17": {"v": "M", "c": "FFF5DEB3"}, "18": {"v": "E1", "c": "FFBA55D3"}, "19": {"v": "E2", "c": "FFBA55D3"}, "20": {"v": "E1", "c": "FFFFA500"}, "21": {"v": "E3", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFFFA500"}, "24": {"v": "E4", "c": "FFBA55D3"}, "25": {"v": "Mission", "c": "FFDC143C"}, "28": {"v": "E3", "c": "FFFFA500"}, "30": {"v": "E5", "c": "FFBA55D3"}, "33": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Différentes textures", "domain": "Identifier différentes textures", "link": null, "extra": "Les matériaux produisent des effets différents", "cells": {"17": {"v": "L", "c": "FF4682B4"}, "18": {"v": "M", "c": "FFF5DEB3"}, "19": {"v": "E1", "c": "FFBA55D3"}, "20": {"v": "E2", "c": "FFBA55D3"}, "21": {"v": "E1", "c": "FFFFA500"}, "22": {"v": "E3", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFFFA500"}, "25": {"v": "E4", "c": "FFBA55D3"}, "26": {"v": "Mission", "c": "FFDC143C"}, "29": {"v": "E3", "c": "FFFFA500"}, "31": {"v": "E5", "c": "FFBA55D3"}, "34": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Observer et reproduire", "domain": "Dessin libre d'observation", "link": null, "extra": "Observer aide à mieux dessiner", "cells": {"18": {"v": "L", "c": "FF4682B4"}, "19": {"v": "M", "c": "FFF5DEB3"}, "20": {"v": "E1", "c": "FFBA55D3"}, "21": {"v": "E2", "c": "FFBA55D3"}, "22": {"v": "E1", "c": "FFFFA500"}, "23": {"v": "E3", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFFFA500"}, "26": {"v": "E4", "c": "FFBA55D3"}, "27": {"v": "Mission", "c": "FFDC143C"}, "30": {"v": "E3", "c": "FFFFA500"}, "32": {"v": "E5", "c": "FFBA55D3"}, "35": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"19": {"v": "L", "c": "FF4682B4"}, "20": {"v": "M", "c": "FFF5DEB3"}, "21": {"v": "E1", "c": "FFBA55D3"}, "22": {"v": "E2", "c": "FFBA55D3"}, "23": {"v": "E1", "c": "FFFFA500"}, "24": {"v": "E3", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFFFA500"}, "27": {"v": "E4", "c": "FFBA55D3"}, "28": {"v": "Mission", "c": "FFDC143C"}, "31": {"v": "E3", "c": "FFFFA500"}, "33": {"v": "E5", "c": "FFBA55D3"}, "36": {"v": "E6", "c": "FFBA55D3"}}}, {"title": "Le croquis", "domain": "Dessin libre d'observation", "link": null, "extra": "Observer aide à mieux dessiner", "cells": {"20": {"v": "L", "c": "FF4682B4"}, "21": {"v": "M", "c": "FFF5DEB3"}, "22": {"v": "E1", "c": "FFBA55D3"}, "23": {"v": "E2", "c": "FFBA55D3"}, "24": {"v": "E1", "c": "FFFFA500"}, "25": {"v": "E3", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFFFA500"}, "28": {"v": "E4", "c": "FFBA55D3"}, "29": {"v": "Mission", "c": "FFDC143C"}, "32": {"v": "E3", "c": "FFFFA500"}, "34": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Le visage ", "domain": "Dessiner un visage", "link": null, "extra": "Un portrait représente une personne", "cells": {"21": {"v": "L", "c": "FF4682B4"}, "22": {"v": "M", "c": "FFF5DEB3"}, "23": {"v": "E1", "c": "FFBA55D3"}, "24": {"v": "E2", "c": "FFBA55D3"}, "25": {"v": "E1", "c": "FFFFA500"}, "26": {"v": "E3", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFFFA500"}, "29": {"v": "E4", "c": "FFBA55D3"}, "30": {"v": "Mission", "c": "FFDC143C"}, "33": {"v": "E3", "c": "FFFFA500"}, "35": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"22": {"v": "L", "c": "FF4682B4"}, "23": {"v": "M", "c": "FFF5DEB3"}, "24": {"v": "E1", "c": "FFBA55D3"}, "25": {"v": "E2", "c": "FFBA55D3"}, "26": {"v": "E1", "c": "FFFFA500"}, "27": {"v": "E3", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFFFA500"}, "30": {"v": "E4", "c": "FFBA55D3"}, "31": {"v": "Mission", "c": "FFDC143C"}, "34": {"v": "E3", "c": "FFFFA500"}, "36": {"v": "E5", "c": "FFBA55D3"}}}, {"title": "La silhouette ", "domain": "Dessiner un visage", "link": null, "extra": "Un portrait représente une personne", "cells": {"23": {"v": "L", "c": "FF4682B4"}, "24": {"v": "M", "c": "FFF5DEB3"}, "25": {"v": "E1", "c": "FFBA55D3"}, "26": {"v": "E2", "c": "FFBA55D3"}, "27": {"v": "E1", "c": "FFFFA500"}, "28": {"v": "E3", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFFFA500"}, "31": {"v": "E4", "c": "FFBA55D3"}, "32": {"v": "Mission", "c": "FFDC143C"}, "35": {"v": "E3", "c": "FFFFA500"}}}, {"title": "L'émotion dans l'art", "domain": "Associer images et émotions", "link": null, "extra": "Les artistes représentent des émotions", "cells": {"24": {"v": "L", "c": "FF4682B4"}, "25": {"v": "M", "c": "FFF5DEB3"}, "26": {"v": "E1", "c": "FFBA55D3"}, "27": {"v": "E2", "c": "FFBA55D3"}, "28": {"v": "E1", "c": "FFFFA500"}, "29": {"v": "E3", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFFFA500"}, "32": {"v": "E4", "c": "FFBA55D3"}, "33": {"v": "Mission", "c": "FFDC143C"}, "36": {"v": "E3", "c": "FFFFA500"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"25": {"v": "L", "c": "FF4682B4"}, "26": {"v": "M", "c": "FFF5DEB3"}, "27": {"v": "E1", "c": "FFBA55D3"}, "28": {"v": "E2", "c": "FFBA55D3"}, "29": {"v": "E1", "c": "FFFFA500"}, "30": {"v": "E3", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFFFA500"}, "33": {"v": "E4", "c": "FFBA55D3"}, "34": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Apprécier une oeuvre d'art", "domain": "Associer images et émotions", "link": null, "extra": "Les artistes représentent des émotions", "cells": {"26": {"v": "L", "c": "FF4682B4"}, "27": {"v": "M", "c": "FFF5DEB3"}, "28": {"v": "E1", "c": "FFBA55D3"}, "29": {"v": "E2", "c": "FFBA55D3"}, "30": {"v": "E1", "c": "FFFFA500"}, "31": {"v": "E3", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFFFA500"}, "34": {"v": "E4", "c": "FFBA55D3"}, "35": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Construire librement en 3D", "domain": "Construire librement", "link": null, "extra": "Une œuvre peut être en trois dimensions", "cells": {"27": {"v": "L", "c": "FF4682B4"}, "28": {"v": "M", "c": "FFF5DEB3"}, "29": {"v": "E1", "c": "FFBA55D3"}, "30": {"v": "E2", "c": "FFBA55D3"}, "31": {"v": "E1", "c": "FFFFA500"}, "32": {"v": "E3", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFFFA500"}, "35": {"v": "E4", "c": "FFBA55D3"}, "36": {"v": "Mission", "c": "FFDC143C"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"28": {"v": "L", "c": "FF4682B4"}, "29": {"v": "M", "c": "FFF5DEB3"}, "30": {"v": "E1", "c": "FFBA55D3"}, "31": {"v": "E2", "c": "FFBA55D3"}, "32": {"v": "E1", "c": "FFFFA500"}, "33": {"v": "E3", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFFFA500"}, "36": {"v": "E4", "c": "FFBA55D3"}}}, {"title": "Savoir faire un pliage simple", "domain": "Construire librement", "link": null, "extra": "Une œuvre peut être en trois dimensions", "cells": {"29": {"v": "L", "c": "FF4682B4"}, "30": {"v": "M", "c": "FFF5DEB3"}, "31": {"v": "E1", "c": "FFBA55D3"}, "32": {"v": "E2", "c": "FFBA55D3"}, "33": {"v": "E1", "c": "FFFFA500"}, "34": {"v": "E3", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFFFA500"}}}, {"title": "Connaître le lexique simple du paysage", "domain": "Dessiner un paysage", "link": null, "extra": "L'espace s'organise dans une image", "cells": {"30": {"v": "L", "c": "FF4682B4"}, "31": {"v": "M", "c": "FFF5DEB3"}, "32": {"v": "E1", "c": "FFBA55D3"}, "33": {"v": "E2", "c": "FFBA55D3"}, "34": {"v": "E1", "c": "FFFFA500"}, "35": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "Dessin de poésie", "domain": null, "link": null, "extra": null, "cells": {"31": {"v": "L", "c": "FF4682B4"}, "32": {"v": "M", "c": "FFF5DEB3"}, "33": {"v": "E1", "c": "FFBA55D3"}, "34": {"v": "E2", "c": "FFBA55D3"}, "35": {"v": "E1", "c": "FFFFA500"}, "36": {"v": "E3", "c": "FFBA55D3"}}}, {"title": "Différents plans", "domain": "Dessiner un paysage", "link": null, "extra": "L'espace s'organise dans une image", "cells": {"32": {"v": "L", "c": "FF4682B4"}, "33": {"v": "M", "c": "FFF5DEB3"}, "34": {"v": "E1", "c": "FFBA55D3"}, "35": {"v": "E2", "c": "FFBA55D3"}, "36": {"v": "E1", "c": "FFFFA500"}}}, {"title": "Dessin imaginaire libre", "domain": "Dessin imaginaire libre", "link": null, "extra": "L'art permet d'inventer", "cells": {"33": {"v": "L", "c": "FF4682B4"}, "34": {"v": "M", "c": "FFF5DEB3"}, "35": {"v": "E1", "c": "FFBA55D3"}, "36": {"v": "E2", "c": "FFBA55D3"}}}, {"title": "Dessin imaginaire libre", "domain": "Dessin imaginaire libre", "link": null, "extra": "L'art permet d'inventer", "cells": {"34": {"v": "L", "c": "FF4682B4"}, "35": {"v": "M", "c": "FFF5DEB3"}, "36": {"v": "E1", "c": "FFBA55D3"}}}, {"title": "Apprécier une oeuvre d'un camarade", "domain": "Coopérer dans une activité simple", "link": null, "extra": "Plusieurs artistes peuvent créer ensemble", "cells": {"35": {"v": "L", "c": "FF4682B4"}, "36": {"v": "M", "c": "FFF5DEB3"}}}]}};
+const EDT_TEMPLATE = {"lundi": [{"heure": "8h30", "matiere": "Dictée", "modalite": "Evaluation", "competence": null}, {"heure": "8h40", "matiere": "Problèmes", "modalite": "Evaluation", "competence": null}, {"heure": "9h00", "matiere": "Graphie", "modalite": "Evaluation", "competence": null}, {"heure": "9h10", "matiere": "Français", "modalite": "Autonomie", "competence": null}, {"heure": "9h30", "matiere": "Maths", "modalite": "Leçon", "competence": null}, {"heure": "9h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "10h05", "matiere": "Dictée", "modalite": "Modelage", "competence": null}, {"heure": "10h20", "matiere": "Lecture", "modalite": "Entraînement", "competence": null}, {"heure": "10h30", "matiere": "Maths", "modalite": "Entraînement", "competence": null}, {"heure": "10h50", "matiere": "Maths", "modalite": "Mission", "competence": null}, {"heure": "11h20", "matiere": "Oral", "modalite": "Leçon", "competence": null}, {"heure": "11h40", "matiere": "Ed° musicale", "modalite": "Leçon", "competence": null}, {"heure": "11h45", "matiere": null, "modalite": "Cantine", "competence": "ou Sortie DP"}, {"heure": "13h30", "matiere": "HGScEmcEvar", "modalite": "Cartable", "competence": "Vérifier pile pour le cartable"}, {"heure": "13h45", "matiere": "Calcul mental", "modalite": "Entraînement", "competence": null}, {"heure": "13h55", "matiere": "Problèmes", "modalite": "Entraînement", "competence": null}, {"heure": "14h00", "matiere": "Graphie", "modalite": "Entraînement", "competence": null}, {"heure": "14h20", "matiere": "Lecture", "modalite": "Modelage", "competence": null}, {"heure": "14h30", "matiere": "Art", "modalite": "Modelage", "competence": null}, {"heure": "14h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "15h05", "matiere": "Anglais", "modalite": "Leçon", "competence": null}, {"heure": "15h15", "matiere": "HGScEmcEvar", "modalite": "Entraînement", "competence": null}, {"heure": "15h30", "matiere": "Art", "modalite": "Mission", "competence": null}, {"heure": "15h50", "matiere": "EPS", "modalite": "Leçon", "competence": null}, {"heure": "16h00", "matiere": "EPS", "modalite": "Entraînement", "competence": null}, {"heure": "16h30", "matiere": null, "modalite": "Sortie", "competence": "\"Parents\" : rue Barjavel"}], "mardi": [{"heure": "8h30", "matiere": "Lecture", "modalite": "Evaluation", "competence": null}, {"heure": "8h40", "matiere": "Maths", "modalite": "Evaluation", "competence": null}, {"heure": "9h00", "matiere": "Graphie", "modalite": "Evaluation", "competence": null}, {"heure": "9h10", "matiere": "Autonomie", "modalite": "Autonomie", "competence": null}, {"heure": "9h30", "matiere": "Lecture", "modalite": "Leçon", "competence": null}, {"heure": "9h45", "matiere": "Graphie", "modalite": "Leçon", "competence": null}, {"heure": "9h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "10h05", "matiere": "Maths", "modalite": "Modelage", "competence": null}, {"heure": "10h25", "matiere": "Graphie", "modalite": "Leçon", "competence": null}, {"heure": "10h30", "matiere": "Maths", "modalite": "Entraînement", "competence": null}, {"heure": "10h45", "matiere": "Lecture", "modalite": "Entraînement", "competence": null}, {"heure": "11h00", "matiere": "Français", "modalite": "Mission", "competence": null}, {"heure": "11h30", "matiere": "Oral", "modalite": "Modelage", "competence": null}, {"heure": "11h45", "matiere": null, "modalite": "Cantine", "competence": "ou Sortie DP"}, {"heure": "13h30", "matiere": "HGScEmcEvar", "modalite": "Cartable", "competence": "Vérifier pile pour le cartable"}, {"heure": "13h40", "matiere": null, "modalite": "Modelage", "competence": null}, {"heure": "13h45", "matiere": "Calcul mental", "modalite": "Entraînement", "competence": null}, {"heure": "13h55", "matiere": "Problèmes", "modalite": "Entraînement", "competence": null}, {"heure": "14h00", "matiere": "Dictée", "modalite": "Entraînement", "competence": null}, {"heure": "14h10", "matiere": "Graphie", "modalite": "Entraînement", "competence": null}, {"heure": "14h30", "matiere": "Anglais", "modalite": "Modelage", "competence": null}, {"heure": "14h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "15h05", "matiere": "HGScEmcEvar", "modalite": "Leçon", "competence": null}, {"heure": "15h15", "matiere": "Anglais", "modalite": "Entraînement", "competence": null}, {"heure": "15h30", "matiere": "HGScEmcEvar", "modalite": "Mission", "competence": null}, {"heure": "15h50", "matiere": "EPS", "modalite": null, "competence": null}, {"heure": "16h30", "matiere": null, "modalite": "Sortie", "competence": "\"Parents\" : rue Barjavel"}], "jeudi": [{"heure": "8h30", "matiere": "Accueil", "modalite": "Faire connaissance", "competence": null}, {"heure": "8h40", "matiere": "Ed° musicale", "modalite": "Leçon", "competence": null}, {"heure": "9h00", "matiere": "Accueil", "modalite": "Installation", "competence": null}, {"heure": "9h05", "matiere": "Maths", "modalite": "Autonomie", "competence": null}, {"heure": "9h30", "matiere": "Lecture", "modalite": "Leçon", "competence": null}, {"heure": "9h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "10h05", "matiere": "Histoire", "modalite": "Leçon", "competence": null}, {"heure": "10h20", "matiere": "Classe", "modalite": "Découverte", "competence": null}, {"heure": "10h30", "matiere": "Maths", "modalite": "Leçon", "competence": null}, {"heure": "10h50", "matiere": "Maths", "modalite": "Mission", "competence": null}, {"heure": "11h05", "matiere": "Oral", "modalite": "Leçon", "competence": null}, {"heure": "11h20", "matiere": "Art", "modalite": "Leçon", "competence": null}, {"heure": "11h40", "matiere": "Ed° musicale", "modalite": "Modelage", "competence": null}, {"heure": "11h45", "matiere": null, "modalite": "Cantine", "competence": "ou Sortie DP"}, {"heure": "13h30", "matiere": "HGScEmcEvar", "modalite": "Cartable", "competence": "Vérifier pile pour le cartable"}, {"heure": "13h40", "matiere": "Lecture", "modalite": "Modelage", "competence": null}, {"heure": "13h45", "matiere": "Calcul mental", "modalite": "Entraînement", "competence": null}, {"heure": "13h55", "matiere": "Problèmes", "modalite": "Entraînement", "competence": null}, {"heure": "14h00", "matiere": "Dictée", "modalite": "Entraînement", "competence": null}, {"heure": "14h10", "matiere": "Graphie", "modalite": "Entraînement", "competence": null}, {"heure": "14h30", "matiere": "HGScEmcEvar", "modalite": "Modelage", "competence": null}, {"heure": "14h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "15h05", "matiere": "Anglais", "modalite": "Leçon", "competence": null}, {"heure": "15h15", "matiere": "Art", "modalite": "Entraînement", "competence": null}, {"heure": "15h30", "matiere": "Art", "modalite": "Mission", "competence": null}, {"heure": "15h50", "matiere": "EPS", "modalite": null, "competence": null}, {"heure": "16h30", "matiere": null, "modalite": "Sortie", "competence": "\"Parents\" : rue Barjavel"}], "vendredi": [{"heure": "8h30", "matiere": "Accueil", "modalite": "Rituel", "competence": null}, {"heure": "8h40", "matiere": "Lecture", "modalite": "Leçon", "competence": null}, {"heure": "9h00", "matiere": "Français", "modalite": "Autonomie", "competence": null}, {"heure": "9h10", "matiere": "Français", "modalite": "Autonomie", "competence": null}, {"heure": "9h30", "matiere": "Graphie", "modalite": "Leçon", "competence": null}, {"heure": "9h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "10h05", "matiere": "Maths", "modalite": "Modelage", "competence": null}, {"heure": "10h25", "matiere": "Graphie", "modalite": "Leçon", "competence": null}, {"heure": "10h30", "matiere": "Maths", "modalite": "Entraînement", "competence": null}, {"heure": "10h45", "matiere": "Culture relig", "modalite": "Leçon", "competence": null}, {"heure": "11h45", "matiere": null, "modalite": "Cantine", "competence": "ou Sortie DP"}, {"heure": "13h30", "matiere": "HGScEmcEvar", "modalite": "Cartable", "competence": "Vérifier pile pour le cartable"}, {"heure": "13h40", "matiere": "Lecture", "modalite": "Modelage", "competence": null}, {"heure": "13h50", "matiere": "Calcul mental", "modalite": "Entraînement", "competence": null}, {"heure": "13h55", "matiere": "Dictée", "modalite": "Leçon", "competence": null}, {"heure": "14h10", "matiere": "Graphie", "modalite": "Entraînement", "competence": null}, {"heure": "14h30", "matiere": "HGScEmcEvar", "modalite": "Modelage", "competence": null}, {"heure": "14h50", "matiere": null, "modalite": "Récréation", "competence": "Service de surveillance"}, {"heure": "15h05", "matiere": "Art", "modalite": "Leçon", "competence": null}, {"heure": "15h15", "matiere": "HGScEmcEvar", "modalite": "Entraînement", "competence": null}, {"heure": "15h30", "matiere": "Anglais", "modalite": "Mission", "competence": null}, {"heure": "15h50", "matiere": "EPS", "modalite": null, "competence": null}, {"heure": "16h30", "matiere": null, "modalite": "Sortie", "competence": "\"Parents\" : rue Barjavel"}]};
+const STUDENTS = ["Arielle", "Augustin", "Aurélien", "Charlie", "Charly", "Eden", "Eris", "Hank", "Ilan", "Iris", "Isaiah", "Louis", "Lyam", "Léa", "Maël", "Nella", "Octavia", "Olympe", "Pablo", "Raphaël", "Tessa", "Thaïs", "Thibault", "Théo", "Yoko", "Yüna", "Zélie"];
+
+</script>
+<script>
+// ---------- Config ----------
+const COLOR_MAP = {
+  "FF4682B4": { name: "Leçon", css: "var(--son)" },
+  "FFF5DEB3": { name: "Modelage", css: "var(--modelage)" },
+  "FFBA55D3": { name: "Entraînement", css: "var(--entrainement)" },
+  "FFFFA500": { name: "Évaluation", css: "var(--evaluation)" },
+  "FFDC143C": { name: "Mission", css: "var(--mission)" }
+};
+
+const SUBJECT_LABELS = {
+  "Oral": "Langage oral",
+  "Lecture": "Lecture",
+  "Compréhension": "Compréhension",
+  "Graphie": "Graphie / Écriture",
+  "Rédaction": "Rédaction",
+  "Calcul mental": "Calcul mental",
+  "Problèmes": "Problèmes",
+  "Maths": "Maths",
+  "EDL": "Étude de la langue",
+  "Anglais": "Anglais",
+  "HGScEmcEvar": "Questionner le monde",
+  "Ed° musicale": "Éducation musicale",
+  "Art": "Arts",
+  "Fluence": "Fluence"
+};
+
+// ---------- Helpers ----------
+function fmtDate(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function parseDate(s){
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function addDays(dateStr, n){
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate()+n);
+  return fmtDate(d);
+}
+function dayLabelFr(dateStr){
+  const d = parseDate(dateStr);
+  return d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 }
 
-function getAuth(){
-  const creds = getServiceAccountCredentials();
-  return new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive'
-    ]
+// Find the column (date) to use for a given subject + target date:
+// exact match if present, else the closest PREVIOUS date column that exists.
+function findActiveColumn(sheet, targetDateStr){
+  let best = null, bestDate = null;
+  for (const [col, dstr] of Object.entries(sheet.date_cols)){
+    if (dstr <= targetDateStr){
+      if (bestDate === null || dstr > bestDate){
+        bestDate = dstr; best = col;
+      }
+    }
+  }
+  return best; // may be null if target date is before everything
+}
+
+// Return list of {title, domain, link, extra, modality, css} active for a subject on a given date
+function getActiveEntries(subjectName, targetDateStr){
+  const sheet = SUBJECT_DATA[subjectName];
+  if (!sheet) return [];
+  const col = findActiveColumn(sheet, targetDateStr);
+  if (!col) return [];
+  const out = [];
+  for (const row of sheet.rows){
+    const cell = row.cells[col];
+    if (cell && cell.c && COLOR_MAP[cell.c]){
+      out.push({
+        title: row.title,
+        domain: row.domain,
+        link: row.link,
+        extra: row.extra,
+        rawValue: cell.v,
+        modality: COLOR_MAP[cell.c].name,
+        css: COLOR_MAP[cell.c].css
+      });
+    }
+  }
+  return out;
+}
+
+// ---------- Emploi du temps (weekly template) ----------
+const WEEKDAY_FR = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+
+// Modalité label (Emploi du temps) -> modality name used in COLOR_MAP
+const MODALITE_TO_COLORNAME = {
+  "Leçon": "Leçon",
+  "Modelage": "Modelage",
+  "Entraînement": "Entraînement",
+  "Mission": "Mission",
+  "Evaluation": "Évaluation",
+  "Évaluation": "Évaluation"
+};
+
+// Couleur d'affichage pour CHAQUE modalité de l'emploi du temps (même celles sans
+// feuille de suivi dédiée), utilisée pour colorer le déroulé de la journée.
+const MODALITE_DISPLAY = {
+  "Leçon":        { label: "Leçon",        css: "var(--son)" },
+  "Modelage":     { label: "Modelage",     css: "var(--modelage)" },
+  "Entraînement": { label: "Entraînement", css: "var(--entrainement)" },
+  "Evaluation":   { label: "Évaluation",   css: "var(--evaluation)" },
+  "Évaluation":   { label: "Évaluation",   css: "var(--evaluation)" },
+  "Mission":      { label: "Mission",      css: "var(--mission)" },
+  "Autonomie":    { label: "Autonomie",    css: "var(--autonomie)" }
+};
+
+// Matière (Emploi du temps) -> clé dans SUBJECT_DATA
+const MATIERE_TO_SUBJECT = {
+  "Lecture": "Lecture",
+  "Anglais": "Anglais",
+  "Oral": "Oral",
+  "Problèmes": "Problèmes",
+  "HGScEmcEvar": "HGScEmcEvar",
+  "Graphie": "Graphie",
+  "Calcul mental": "Calcul mental",
+  "Maths": "Maths",
+  "Art": "Art",
+  "Ed° musicale": "Ed° musicale"
+  // Français, Dictée, Histoire, Classe, Culture relig, EPS, Accueil : pas de feuille dédiée -> affichage simple
+};
+
+function weekdayNameFr(dateStr){
+  return WEEKDAY_FR[parseDate(dateStr).getDay()];
+}
+
+// find the specific colored entry for a subject/date matching a given modality name
+function getEntryForModality(subjectKey, dateStr, modalityName){
+  const entries = getActiveEntries(subjectKey, dateStr);
+  return entries.find(e => e.modality === modalityName) || null;
+}
+
+// ---------- Emploi du temps modifiable (surcharge locale) ----------
+const EDT_OVERRIDE_KEY = 'cahier_de_classe_edt_override_v1';
+function loadEdtOverride(){
+  try{ return JSON.parse(localStorage.getItem(EDT_OVERRIDE_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveEdtOverride(obj){
+  try{ localStorage.setItem(EDT_OVERRIDE_KEY, JSON.stringify(obj)); }
+  catch(e){ /* stockage indisponible */ }
+}
+// Renvoie les créneaux à utiliser pour un jour : la version modifiée si elle existe,
+// sinon celle d'origine issue de la feuille "Emploi du temps".
+function getEffectiveSlots(weekday){
+  const override = loadEdtOverride();
+  if (override[weekday]) return override[weekday];
+  return EDT_TEMPLATE[weekday] || null;
+}
+
+// ---------- Cahier Journal ----------
+// ---------- Notes libres du Cahier journal (par date + créneau) ----------
+const JOURNAL_NOTES_KEY = 'cahier_de_classe_journal_notes_v1';
+function journalNoteKey(dateStr, idx){ return `${dateStr}::${idx}`; }
+function loadJournalNotes(){
+  try{ return JSON.parse(localStorage.getItem(JOURNAL_NOTES_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveJournalNote(dateStr, idx, text){
+  const store = loadJournalNotes();
+  store[journalNoteKey(dateStr, idx)] = text;
+  try{ localStorage.setItem(JOURNAL_NOTES_KEY, JSON.stringify(store)); }
+  catch(e){ /* stockage indisponible */ }
+}
+
+// ---------- Analyse de pratique (une note par jour) ----------
+const ANALYSE_STORAGE_KEY = 'cahier_de_classe_analyse_v1';
+function loadAnalyseStore(){
+  try{ return JSON.parse(localStorage.getItem(ANALYSE_STORAGE_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveAnalyseForDate(dateStr, texte){
+  const store = loadAnalyseStore();
+  store[dateStr] = texte;
+  try{ localStorage.setItem(ANALYSE_STORAGE_KEY, JSON.stringify(store)); }
+  catch(e){ /* stockage indisponible */ }
+}
+
+// ---------- Agenda Google (optionnel, lecture via backend Vercel) ----------
+// Renseigne cette URL une fois le backend déployé sur Vercel, ex :
+// const AGENDA_API_URL = 'https://cahier-de-classe.vercel.app/api/agenda';
+const AGENDA_API_URL = 'https://cahier-de-classe-cp.vercel.app/api/agenda';
+
+function parseHeureToMinutes(heureStr){
+  if (!heureStr) return null;
+  const m = String(heureStr).match(/(\d{1,2})h(\d{0,2})/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mm = m[2] ? parseInt(m[2], 10) : 0;
+  return h * 60 + mm;
+}
+
+async function fetchAgendaEvents(dateStr){
+  if (!AGENDA_API_URL) return [];
+  try{
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch(`${AGENDA_API_URL}?date=${dateStr}`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.events || [];
+  }catch(e){
+    return []; // silencieux : si l'agenda est indisponible, le cahier journal reste utilisable normalement
+  }
+}
+
+function findAgendaEventForSlot(events, slotStartMin, slotEndMin){
+  if (slotStartMin == null || slotEndMin == null) return null;
+  return events.find(e => e.startMinutes < slotEndMin && e.endMinutes > slotStartMin) || null;
+}
+
+let journalRenderSeq = 0;
+// ---------- Case "Fait" par créneau du Cahier journal ----------
+const JOURNAL_DONE_KEY = 'cahier_de_classe_journal_done_v1';
+function loadJournalDone(){
+  try{ return JSON.parse(localStorage.getItem(JOURNAL_DONE_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveJournalDone(dateStr, idx, checked){
+  const store = loadJournalDone();
+  const key = journalNoteKey(dateStr, idx);
+  if (checked) store[key] = true; else delete store[key];
+  try{ localStorage.setItem(JOURNAL_DONE_KEY, JSON.stringify(store)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function buildDoneCheckbox(dateStr, idx){
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'done-checkbox';
+  cb.title = 'Fait';
+  cb.checked = !!loadJournalDone()[journalNoteKey(dateStr, idx)];
+  cb.addEventListener('change', () => {
+    saveJournalDone(dateStr, idx, cb.checked);
+    const card = cb.closest('.subject-card');
+    if (card) card.classList.toggle('card-done', cb.checked);
+  });
+  return cb;
+}
+
+async function renderJournal(dateStr){
+  const mySeq = ++journalRenderSeq;
+  document.getElementById('journalDate').value = dateStr;
+  document.getElementById('dayLabel').textContent = dayLabelFr(dateStr);
+  const container = document.getElementById('journalContent');
+  container.innerHTML = '';
+
+  const analyseTa = document.getElementById('analyseText');
+  const analyseStore = loadAnalyseStore();
+  analyseTa.value = analyseStore[dateStr] || '';
+  analyseTa.oninput = () => saveAnalyseForDate(dateStr, analyseTa.value);
+
+  const wd = weekdayNameFr(dateStr);
+  const slots = getEffectiveSlots(wd);
+
+  if (!slots){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Pas classe ce jour-là (mercredi / week-end).";
+    container.appendChild(note);
+    return;
+  }
+
+  const agendaEvents = await fetchAgendaEvents(dateStr);
+  // évite d'afficher un résultat périmé si un rendu plus récent a été déclenché entre-temps
+  if (mySeq !== journalRenderSeq) return;
+  container.innerHTML = '';
+
+  const usedAgendaEvents = new Set();
+
+  slots.forEach((slot, idx) => {
+    const slotStartMin = parseHeureToMinutes(slot.heure);
+    const nextSlot = slots[idx + 1];
+    const slotEndMin = nextSlot ? parseHeureToMinutes(nextSlot.heure) : (slotStartMin != null ? slotStartMin + 60 : null);
+    let agendaEvent = agendaEvents.length ? findAgendaEventForSlot(agendaEvents, slotStartMin, slotEndMin) : null;
+
+    // Un même événement peut chevaucher plusieurs créneaux consécutifs de l'emploi du
+    // temps (ex. un cours de 30 min qui couvre 2 lignes) : on ne l'affiche qu'une fois.
+    if (agendaEvent && usedAgendaEvents.has(agendaEvent)) return;
+    if (agendaEvent) usedAgendaEvents.add(agendaEvent);
+
+    const card = document.createElement('div');
+    card.className = 'subject-card';
+
+    if (agendaEvent){
+      const h3 = document.createElement('h3');
+      const heureSpan = document.createElement('span');
+      heureSpan.textContent = `${agendaEvent.start}–${agendaEvent.end}`;
+      heureSpan.style.fontSize = '0.8rem';
+      heureSpan.style.color = 'var(--ink-soft)';
+      heureSpan.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const headerRightAgenda = document.createElement('span');
+      headerRightAgenda.style.display = 'flex';
+      headerRightAgenda.style.alignItems = 'center';
+      headerRightAgenda.style.gap = '8px';
+      headerRightAgenda.appendChild(buildDoneCheckbox(dateStr, idx));
+      headerRightAgenda.appendChild(heureSpan);
+      h3.innerHTML = `<span>${agendaEvent.title || '(sans titre)'}</span>`;
+      h3.appendChild(headerRightAgenda);
+      card.appendChild(h3);
+      card.style.setProperty('--card-mod-color', 'var(--gold)');
+      if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
+
+      const body = document.createElement('div');
+      body.className = 'subject-body';
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.style.background = 'var(--gold)';
+      badge.textContent = '📅 Agenda';
+      badge.style.marginBottom = '6px';
+      badge.style.display = 'inline-block';
+      body.appendChild(badge);
+      if (agendaEvent.description){
+        const desc = document.createElement('div');
+        desc.className = 'entry-meta';
+        desc.textContent = agendaEvent.description;
+        body.appendChild(desc);
+      }
+      card.appendChild(body);
+      container.appendChild(card);
+      return;
+    }
+
+    const h3 = document.createElement('h3');
+    const heureSpan = document.createElement('span');
+    heureSpan.textContent = slot.heure || '';
+    heureSpan.style.fontSize = '0.8rem';
+    heureSpan.style.color = 'var(--ink-soft)';
+    heureSpan.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const headerRight = document.createElement('span');
+    headerRight.style.display = 'flex';
+    headerRight.style.alignItems = 'center';
+    headerRight.style.gap = '8px';
+    headerRight.appendChild(buildDoneCheckbox(dateStr, idx));
+    headerRight.appendChild(heureSpan);
+    h3.innerHTML = `<span>${slot.matiere || slot.modalite || '—'}</span>`;
+    h3.appendChild(headerRight);
+    card.appendChild(h3);
+
+    const body = document.createElement('div');
+    body.className = 'subject-body';
+
+    const colorName = MODALITE_TO_COLORNAME[slot.modalite];
+    const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
+
+    let found = null;
+    if (colorName && subjectKey){
+      found = getEntryForModality(subjectKey, dateStr, colorName);
+    }
+    const modDispForColor = MODALITE_DISPLAY[slot.modalite];
+    card.style.setProperty('--card-mod-color', found ? found.css : (modDispForColor ? modDispForColor.css : 'var(--ink)'));
+    if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
+
+    if (found){
+      const row = document.createElement('div');
+      row.className = 'entry';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = found.css;
+      row.appendChild(dot);
+
+      const textWrap = document.createElement('div');
+      textWrap.className = 'entry-text';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'entry-title';
+      titleEl.textContent = found.title + (found.extra ? ` — ${found.extra}` : '');
+      textWrap.appendChild(titleEl);
+      row.appendChild(textWrap);
+
+      const badgeRow = document.createElement('div');
+      badgeRow.className = 'badge-row';
+      if (found.domain){
+        const domBadge = document.createElement('span');
+        domBadge.className = 'badge badge-domain';
+        domBadge.textContent = found.domain;
+        badgeRow.appendChild(domBadge);
+      }
+      if (found.link){
+        const linkBadge = document.createElement('a');
+        linkBadge.className = 'badge badge-link';
+        linkBadge.href = found.link;
+        linkBadge.target = '_blank';
+        linkBadge.textContent = 'lien';
+        badgeRow.appendChild(linkBadge);
+      }
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.style.background = found.css;
+      badge.textContent = found.modality;
+      badgeRow.appendChild(badge);
+      row.appendChild(badgeRow);
+
+      body.appendChild(row);
+    } else {
+      // simple display line (Autonomie, Récréation, Cantine, matière sans feuille dédiée, etc.)
+      if (slot.modalite){
+        const modLine = document.createElement('div');
+        modLine.className = 'entry-meta';
+        modLine.style.marginBottom = '6px';
+        const disp = MODALITE_DISPLAY[slot.modalite];
+        if (disp){
+          const dot = document.createElement('span');
+          dot.className = 'dot';
+          dot.style.background = disp.css;
+          dot.style.marginRight = '6px';
+          dot.style.verticalAlign = 'middle';
+          dot.style.display = 'inline-block';
+          modLine.appendChild(dot);
+          const label = document.createElement('span');
+          label.style.color = disp.css;
+          label.style.fontWeight = '600';
+          label.textContent = disp.label;
+          modLine.appendChild(label);
+        } else {
+          modLine.textContent = slot.modalite;
+        }
+        body.appendChild(modLine);
+      }
+      const savedNote = loadJournalNotes()[journalNoteKey(dateStr, idx)];
+      const initialNote = savedNote !== undefined ? savedNote : (slot.competence || '');
+      const noteToggle = buildNoteToggle(initialNote, `Notes libres — ${slot.matiere || slot.modalite || ''}`, (val) => {
+        saveJournalNote(dateStr, idx, val);
+      });
+      noteToggle._textarea.dataset.slotIdx = idx;
+      headerRight.appendChild(noteToggle._btn);
+      body.appendChild(noteToggle._textarea);
+    }
+
+    card.appendChild(body);
+    container.appendChild(card);
   });
 }
 
-function getSheetsClient(){
-  return google.sheets({ version: 'v4', auth: getAuth() });
+function shiftJournalDay(delta){
+  const cur = document.getElementById('journalDate').value;
+  renderJournal(addDays(cur, delta));
 }
 
-function getDriveClient(){
-  return google.drive({ version: 'v3', auth: getAuth() });
+// Copie robuste : essaie l'API Clipboard, sinon bascule sur execCommand (utile en file:// ou webview restreinte)
+function safeCopyText(text, successMsg){
+  function fallbackCopy(){
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) showToast(successMsg);
+      else showToast("Impossible de copier automatiquement — sélectionne et copie le texte manuellement.");
+    }catch(e){
+      showToast("Impossible de copier automatiquement — sélectionne et copie le texte manuellement.");
+    }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
 }
 
-module.exports = { getAuth, getSheetsClient, getDriveClient };
+function copyJournalToClipboard(){
+  const dateStr = document.getElementById('journalDate').value;
+  const wd = weekdayNameFr(dateStr);
+  const slots = getEffectiveSlots(wd) || [];
+  let lines = [];
+  slots.forEach((slot, idx) => {
+    const colorName = MODALITE_TO_COLORNAME[slot.modalite];
+    const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
+    const found = (colorName && subjectKey) ? getEntryForModality(subjectKey, dateStr, colorName) : null;
+    if (found){
+      lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, found.title + (found.extra ? ` — ${found.extra}` : ''), found.link || '', ''].join('\t'));
+    } else {
+      const ta = document.querySelector(`textarea[data-slot-idx="${idx}"]`);
+      const txt = ta ? ta.value.trim() : '';
+      lines.push([dateStr, slot.heure || '', slot.matiere || '', slot.modalite || '', txt, '', ''].join('\t'));
+    }
+  });
+  const analyseTxt = document.getElementById('analyseText').value.trim();
+  if (analyseTxt){
+    lines.push([dateStr, '', 'Analyse de pratique', '', analyseTxt, '', ''].join('\t'));
+  }
+  safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Cahier Journal" du Google Sheet');
+}
+
+// Un devoir ne peut être "à faire pour" un jour sans classe.
+// Mercredi -> jeudi. Samedi/dimanche -> lundi (direction avant par défaut,
+// arrière quand on navigue vers le passé avec le bouton "←").
+function adjustToSchoolDay(dateStr, direction){
+  direction = direction || 1;
+  let d = dateStr;
+  while (['mercredi','samedi','dimanche'].includes(weekdayNameFr(d))){
+    d = addDays(d, direction);
+  }
+  return d;
+}
+
+// ---------- Devoirs ----------
+function renderDevoirs(dateStr, direction){
+  dateStr = adjustToSchoolDay(dateStr, direction);
+  // "dateStr" = date à faire pour (le lendemain d'une séance)
+  document.getElementById('hwDate').value = dateStr;
+  document.getElementById('hwDayLabel').textContent = 'Devoirs pour le ' + dayLabelFr(dateStr);
+  const container = document.getElementById('hwContent');
+  container.innerHTML = '';
+
+  const sessionDateStr = adjustToSchoolDay(addDays(dateStr, -1), -1); // dernier jour d'école précédent
+  const items = devoirsForSession(sessionDateStr);
+
+  if (items.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Aucun devoir détecté automatiquement pour cette date (pas de séance lecture/maths trouvée la veille).";
+    container.appendChild(note);
+  } else {
+    items.forEach(it => {
+      const div = document.createElement('div');
+      div.className = 'homework-item';
+      const h4 = document.createElement('h4');
+      h4.textContent = it.subject;
+      const p = document.createElement('p');
+      p.textContent = it.text;
+      div.appendChild(h4); div.appendChild(p);
+      container.appendChild(div);
+    });
+  }
+}
+
+// Look through the previous day's actual schedule (via Emploi du temps template)
+// and build homework items for Lecture (page du manuel) and Maths (flashcards).
+function devoirsForSession(sessionDateStr){
+  const wd = weekdayNameFr(sessionDateStr);
+  const slots = getEffectiveSlots(wd) || [];
+  const items = [];
+  slots.forEach(slot => {
+    const colorName = MODALITE_TO_COLORNAME[slot.modalite];
+    const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
+    if (!colorName || !subjectKey) return;
+    const found = getEntryForModality(subjectKey, sessionDateStr, colorName);
+    if (!found) return;
+    if (subjectKey === 'Lecture' && found.extra){
+      if (found.modality === 'Modelage'){
+        items.push({ subject: 'Lecture', text: `Lire ${found.extra} (${found.title})` });
+      } else if (found.modality === 'Entraînement'){
+        items.push({ subject: 'Lecture', text: `Relire ${found.extra} (${found.title})` });
+      }
+    } else if (subjectKey === 'Maths'){
+      if (found.modality === 'Leçon'){
+        items.push({ subject: 'Maths', text: `Flashcard n°1 — ${found.title}` });
+      } else if (found.modality === 'Entraînement'){
+        items.push({ subject: 'Maths', text: `Flashcard n°2 — ${found.title}` });
+      }
+    }
+  });
+  return items;
+}
+
+// ---------- Persistance locale des évaluations ----------
+const EVAL_STORAGE_KEY = 'cahier_de_classe_evals_v1';
+
+function loadEvalStore(){
+  try{ return JSON.parse(localStorage.getItem(EVAL_STORAGE_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function saveEvalStore(arr){
+  try{ localStorage.setItem(EVAL_STORAGE_KEY, JSON.stringify(arr)); }
+  catch(e){ /* stockage indisponible, tant pis */ }
+}
+function upsertEvalRecord(rec){
+  const store = loadEvalStore();
+  const key = r => [r.date, r.discipline, r.titre, r.eleve].join('|');
+  const idx = store.findIndex(r => key(r) === key(rec));
+  if (idx >= 0) store[idx] = rec; else store.push(rec);
+  saveEvalStore(store);
+}
+
+// ---------- Évaluations ----------
+const EVAL_SUBJECTS = ["Graphie", "Lecture", "Maths", "Problèmes"]; // matières avec feuille de suivi
+
+// Les évaluations sont ancrées à la date EXACTE de la case orange dans la feuille source
+// (contrairement au cahier journal, on ne reporte pas depuis la date précédente).
+function findExactColumn(sheet, targetDateStr){
+  for (const [col, dstr] of Object.entries(sheet.date_cols)){
+    if (dstr === targetDateStr) return col;
+  }
+  return null;
+}
+function getEvaluationsForDate(subjectKey, targetDateStr){
+  const sheet = SUBJECT_DATA[subjectKey];
+  if (!sheet) return [];
+  const col = findExactColumn(sheet, targetDateStr);
+  if (!col) return [];
+  const out = [];
+  for (const row of sheet.rows){
+    const cell = row.cells[col];
+    if (cell && cell.c === 'FFFFA500'){ // orange = Évaluation
+      out.push({ title: row.title, domain: row.domain, link: row.link });
+    }
+  }
+  return out;
+}
+
+function renderEvaluations(dateStr){
+  document.getElementById('evalDate').value = dateStr;
+  document.getElementById('evalDayLabel').textContent = dayLabelFr(dateStr);
+  const container = document.getElementById('evalContent');
+  container.innerHTML = '';
+
+  let anyFound = false;
+  let idx = 0;
+
+  EVAL_SUBJECTS.forEach(subjectKey => {
+    const entries = getEvaluationsForDate(subjectKey, dateStr);
+    entries.forEach(found => {
+      anyFound = true;
+      idx++;
+
+      const card = document.createElement('div');
+      card.className = 'eval-card';
+      card.dataset.evalIdx = idx;
+      card.dataset.discipline = subjectKey;
+      card.dataset.domaine = found.domain || '';
+      let displayTitle = found.title;
+      if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
+      card.dataset.titre = displayTitle;
+
+      const h3 = document.createElement('h3');
+      h3.textContent = `${subjectKey} — ${displayTitle}`;
+      card.appendChild(h3);
+
+      if (found.domain){
+        const meta = document.createElement('div');
+        meta.className = 'eval-meta';
+        meta.textContent = found.domain;
+        card.appendChild(meta);
+      }
+
+      STUDENTS.forEach(name => {
+        const row = document.createElement('div');
+        row.className = 'student-row';
+        const span = document.createElement('span');
+        span.textContent = name;
+        row.appendChild(span);
+
+        const existing = loadEvalStore().find(r =>
+          r.date === dateStr && r.discipline === subjectKey && r.titre === displayTitle && r.eleve === name
+        );
+        const initialScore = existing ? parseInt(existing.score, 10) || 0 : 0;
+
+        const controls = document.createElement('div');
+        controls.className = 'score-controls';
+
+        const minusBtn = document.createElement('button');
+        minusBtn.className = 'score-btn';
+        minusBtn.textContent = '−';
+
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'score-value';
+        valueSpan.textContent = String(initialScore);
+        valueSpan.dataset.score = String(initialScore);
+        valueSpan.dataset.student = name;
+
+        const plusBtn = document.createElement('button');
+        plusBtn.className = 'score-btn';
+        plusBtn.textContent = '+';
+
+        function commitScore(newScore){
+          newScore = Math.max(0, newScore);
+          valueSpan.textContent = String(newScore);
+          valueSpan.dataset.score = String(newScore);
+          upsertEvalRecord({
+            date: dateStr,
+            discipline: subjectKey,
+            domaine: found.domain || '',
+            titre: displayTitle,
+            eleve: name,
+            score: String(newScore)
+          });
+        }
+        minusBtn.addEventListener('click', () => commitScore(parseInt(valueSpan.dataset.score,10) - 1));
+        plusBtn.addEventListener('click', () => commitScore(parseInt(valueSpan.dataset.score,10) + 1));
+
+        controls.appendChild(minusBtn);
+        controls.appendChild(valueSpan);
+        controls.appendChild(plusBtn);
+        row.appendChild(controls);
+        card.appendChild(row);
+      });
+
+      container.appendChild(card);
+    });
+  });
+
+  if (!anyFound){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Pas d'évaluation prévue ce jour-là.";
+    container.appendChild(note);
+  }
+}
+
+function shiftEvalDay(delta){
+  const cur = document.getElementById('evalDate').value;
+  renderEvaluations(addDays(cur, delta));
+}
+
+function copyEvaluationsToClipboard(){
+  const dateStr = document.getElementById('evalDate').value;
+  const lines = [];
+  document.querySelectorAll('.eval-card').forEach(card => {
+    const discipline = card.dataset.discipline;
+    const domaine = card.dataset.domaine;
+    const titre = card.dataset.titre;
+    card.querySelectorAll('.score-value').forEach(val => {
+      lines.push([dateStr, discipline, domaine, titre, val.dataset.student, val.dataset.score].join('\t'));
+    });
+  });
+  if (lines.length === 0){ showToast("Rien à copier pour cette date"); return; }
+  safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Évaluation" du Google Sheet');
+}
+
+function shiftHwDay(delta){
+  const cur = document.getElementById('hwDate').value;
+  renderDevoirs(addDays(cur, delta), delta >= 0 ? 1 : -1);
+}
+
+function copyHwToClipboard(){
+  const dateStr = document.getElementById('hwDate').value;
+  const sessionDateStr = adjustToSchoolDay(addDays(dateStr, -1), -1);
+  const items = devoirsForSession(sessionDateStr);
+  const lines = items.map(it => [dateStr, it.subject, it.text].join('\t'));
+  safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Devoirs" du Google Sheet');
+}
+
+// ---------- Suivi élèves ----------
+function populateSuiviSelect(){
+  const sel = document.getElementById('suiviStudent');
+  sel.innerHTML = '';
+  STUDENTS.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+}
+
+// Couleur du badge de résultat selon le score cumulé
+function scoreColorClass(total){
+  if (total > 8) return 'turquoise';
+  if (total >= 5) return 'lightgreen';
+  if (total === 3) return 'yellow';
+  if (total > 0) return 'ok';
+  return 'zero';
+}
+
+function populateSuiviFilters(student){
+  const allStore = loadEvalStore().filter(r => r.eleve === student);
+
+  const discSel = document.getElementById('suiviDiscipline');
+  const prevDisc = discSel.value;
+  const disciplines = Array.from(new Set(allStore.map(r => r.discipline))).sort();
+  discSel.innerHTML = '';
+  const allOpt = document.createElement('option');
+  allOpt.value = ''; allOpt.textContent = 'Toutes disciplines';
+  discSel.appendChild(allOpt);
+  disciplines.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    discSel.appendChild(opt);
+  });
+  if (disciplines.includes(prevDisc)) discSel.value = prevDisc;
+
+  const domSel = document.getElementById('suiviDomaine');
+  const prevDom = domSel.value;
+  const scopedForDomains = discSel.value ? allStore.filter(r => r.discipline === discSel.value) : allStore;
+  const domaines = Array.from(new Set(scopedForDomains.map(r => r.domaine || '(sans domaine)'))).sort();
+  domSel.innerHTML = '';
+  const allDomOpt = document.createElement('option');
+  allDomOpt.value = ''; allDomOpt.textContent = 'Tous domaines';
+  domSel.appendChild(allDomOpt);
+  domaines.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    domSel.appendChild(opt);
+  });
+  if (domaines.includes(prevDom)) domSel.value = prevDom;
+}
+
+function renderSuivi(){
+  const sel = document.getElementById('suiviStudent');
+  const student = sel.value;
+  const container = document.getElementById('suiviContent');
+  container.innerHTML = '';
+
+  populateSuiviFilters(student);
+  const disciplineFilter = document.getElementById('suiviDiscipline').value;
+  const domaineFilter = document.getElementById('suiviDomaine').value;
+
+  let store = loadEvalStore().filter(r => r.eleve === student);
+  if (disciplineFilter) store = store.filter(r => r.discipline === disciplineFilter);
+  if (domaineFilter) store = store.filter(r => (r.domaine || '(sans domaine)') === domaineFilter);
+
+  const obsStore = loadObsStore().filter(o => o.eleve === student).sort((a,b) => b.date.localeCompare(a.date));
+
+  if (store.length === 0 && obsStore.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Rien d'enregistré pour cet élève (avec ces filtres) pour le moment.";
+    container.appendChild(note);
+    return;
+  }
+
+  if (obsStore.length > 0 && !disciplineFilter && !domaineFilter){
+    const obsBlock = document.createElement('div');
+    obsBlock.className = 'discipline-group';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Observations';
+    obsBlock.appendChild(h3);
+    const inner = document.createElement('div');
+    inner.className = 'domaine-block';
+    obsStore.forEach(o => {
+      const line = document.createElement('div');
+      line.className = 'result-line';
+      line.style.display = 'block';
+      line.textContent = `${o.date} — ${o.texte}`;
+      inner.appendChild(line);
+    });
+    obsBlock.appendChild(inner);
+    container.appendChild(obsBlock);
+  }
+
+  if (store.length === 0) return;
+
+  // group by discipline, then domaine
+  const byDiscipline = {};
+  store.forEach(r => {
+    byDiscipline[r.discipline] = byDiscipline[r.discipline] || {};
+    const dom = r.domaine || '(sans domaine)';
+    byDiscipline[r.discipline][dom] = byDiscipline[r.discipline][dom] || [];
+    byDiscipline[r.discipline][dom].push(r);
+  });
+
+  Object.keys(byDiscipline).sort().forEach(discipline => {
+    const group = document.createElement('div');
+    group.className = 'discipline-group';
+    const h3 = document.createElement('h3');
+    h3.textContent = discipline;
+    group.appendChild(h3);
+
+    Object.keys(byDiscipline[discipline]).sort().forEach(domaine => {
+      const block = document.createElement('div');
+      block.className = 'domaine-block';
+      const dt = document.createElement('div');
+      dt.className = 'domaine-title';
+      dt.textContent = domaine;
+      block.appendChild(dt);
+
+      // regroupe par titre (= même ligne de la feuille source), on additionne les scores
+      const byTitre = {};
+      byDiscipline[discipline][domaine].forEach(r => {
+        byTitre[r.titre] = byTitre[r.titre] || [];
+        byTitre[r.titre].push(r);
+      });
+
+      Object.keys(byTitre).sort().forEach(titre => {
+        const records = byTitre[titre].sort((a,b) => a.date.localeCompare(b.date));
+        const total = records.reduce((sum, r) => sum + (parseInt(r.score, 10) || 0), 0);
+
+        const titreBlock = document.createElement('div');
+        titreBlock.className = 'titre-block';
+
+        const header = document.createElement('div');
+        header.className = 'titre-header';
+        const titreLabel = document.createElement('span');
+        titreLabel.textContent = titre;
+        header.appendChild(titreLabel);
+        const totalBadge = document.createElement('span');
+        totalBadge.className = 'result-score ' + scoreColorClass(total);
+        totalBadge.textContent = 'Total : ' + total;
+        header.appendChild(totalBadge);
+        titreBlock.appendChild(header);
+
+        records.forEach(r => {
+          const line = document.createElement('div');
+          line.className = 'result-line sub-line';
+          const label = document.createElement('span');
+          label.textContent = r.date;
+          line.appendChild(label);
+
+          const controls = document.createElement('div');
+          controls.className = 'score-controls';
+
+          const minusBtn = document.createElement('button');
+          minusBtn.className = 'score-btn';
+          minusBtn.textContent = '−';
+
+          const valueSpan = document.createElement('span');
+          valueSpan.className = 'score-value';
+          const initial = parseInt(r.score, 10) || 0;
+          valueSpan.textContent = String(initial);
+
+          const plusBtn = document.createElement('button');
+          plusBtn.className = 'score-btn';
+          plusBtn.textContent = '+';
+
+          function commit(newScore){
+            newScore = Math.max(0, newScore);
+            upsertEvalRecord({ date: r.date, discipline: r.discipline, domaine: r.domaine, titre: r.titre, eleve: r.eleve, score: String(newScore) });
+            renderSuivi();
+          }
+          minusBtn.addEventListener('click', () => commit(parseInt(valueSpan.textContent, 10) - 1));
+          plusBtn.addEventListener('click', () => commit(parseInt(valueSpan.textContent, 10) + 1));
+
+          controls.appendChild(minusBtn);
+          controls.appendChild(valueSpan);
+          controls.appendChild(plusBtn);
+          line.appendChild(controls);
+          titreBlock.appendChild(line);
+        });
+
+        block.appendChild(titreBlock);
+      });
+
+      group.appendChild(block);
+    });
+
+    container.appendChild(group);
+  });
+}
+
+// ---------- Connexion au backend (Google Sheets via Vercel) ----------
+const SHEET_API_URL = 'https://cahier-de-classe-cp.vercel.app/api/sheet';
+
+async function sheetGetRows(tab){
+  try{
+    const resp = await fetch(`${SHEET_API_URL}?tab=${encodeURIComponent(tab)}`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.rows || [];
+  }catch(e){
+    return null; // hors-ligne ou backend indisponible : on continue avec le local uniquement
+  }
+}
+async function sheetSaveRow(tab, row, matchColumns){
+  try{
+    await fetch(SHEET_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tab, row, matchColumns })
+    });
+    return true;
+  }catch(e){
+    return false; // hors-ligne : la donnée reste dans le stockage local en attendant
+  }
+}
+
+// ---------- Observations ----------
+const OBS_STORAGE_KEY = 'cahier_de_classe_obs_v1';
+
+function loadObsStore(){
+  try{ return JSON.parse(localStorage.getItem(OBS_STORAGE_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function saveObsStore(arr){
+  try{ localStorage.setItem(OBS_STORAGE_KEY, JSON.stringify(arr)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function addObservation(eleve, texte){
+  const store = loadObsStore();
+  const date = fmtDate(new Date());
+  store.push({ date, eleve, texte, copied: false });
+  saveObsStore(store);
+  sheetSaveRow('Observations', [date, eleve, texte]); // envoi immédiat au Google Sheet
+}
+
+// Récupère les observations déjà présentes dans le Google Sheet (faites depuis un autre
+// appareil) et les fusionne avec celles du stockage local de cet appareil.
+async function syncObsFromSheet(){
+  const rows = await sheetGetRows('Observations');
+  if (!rows || rows.length <= 1) return; // pas de données, ou juste l'en-tête
+  const local = loadObsStore();
+  const known = new Set(local.map(o => `${o.date}|${o.eleve}|${o.texte}`));
+  let added = false;
+  rows.slice(1).forEach(r => {
+    const [date, eleve, texte] = r;
+    if (!date || !eleve) return;
+    const key = `${date}|${eleve}|${texte || ''}`;
+    if (!known.has(key)){
+      local.push({ date, eleve, texte: texte || '', copied: true });
+      known.add(key);
+      added = true;
+    }
+  });
+  if (added) saveObsStore(local);
+}
+
+function populateObsFilter(){
+  const sel = document.getElementById('obsStudentFilter');
+  if (sel.options.length > 0) return; // déjà rempli
+  const allOpt = document.createElement('option');
+  allOpt.value = ''; allOpt.textContent = 'Tous les élèves';
+  sel.appendChild(allOpt);
+  STUDENTS.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    sel.appendChild(opt);
+  });
+}
+
+function renderObservations(){
+  populateObsFilter();
+  const filter = document.getElementById('obsStudentFilter').value;
+  const grid = document.getElementById('obsGrid');
+  grid.innerHTML = '';
+  const store = loadObsStore();
+
+  const namesToShow = filter ? [filter] : STUDENTS;
+
+  namesToShow.forEach(name => {
+    const card = document.createElement('div');
+    card.className = 'obs-card';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'obs-name';
+    nameEl.textContent = name;
+    card.appendChild(nameEl);
+
+    const ta = document.createElement('textarea');
+    ta.placeholder = 'Nouvelle observation…';
+    card.appendChild(ta);
+
+    const btn = document.createElement('button');
+    btn.textContent = 'Ajouter';
+    btn.addEventListener('click', () => {
+      const txt = ta.value.trim();
+      if (!txt) return;
+      addObservation(name, txt);
+      renderObservations();
+    });
+    card.appendChild(btn);
+
+    const entries = store.filter(o => o.eleve === name).sort((a,b) => b.date.localeCompare(a.date));
+    if (entries.length){
+      const count = document.createElement('div');
+      count.className = 'obs-count';
+      count.textContent = `${entries.length} observation${entries.length>1?'s':''}`;
+      card.appendChild(count);
+      const log = document.createElement('div');
+      log.className = 'obs-log-line';
+      log.textContent = `${entries[0].date} — ${entries[0].texte}`;
+      card.appendChild(log);
+    }
+
+    grid.appendChild(card);
+  });
+}
+
+function copyObsToClipboard(){
+  const store = loadObsStore();
+  const toSend = store.filter(o => !o.copied);
+  if (toSend.length === 0){ showToast('Rien de nouveau à copier'); return; }
+  const lines = toSend.map(o => [o.date, o.eleve, o.texte].join('\t'));
+  safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Observations" du Google Sheet');
+  store.forEach(o => { if (!o.copied) o.copied = true; });
+  saveObsStore(store);
+}
+
+// ---------- Emploi du temps (édition) ----------
+function cloneSlots(slots){
+  return JSON.parse(JSON.stringify(slots || []));
+}
+
+const AUTRE_VALUE = '__AUTRE__';
+
+function getAllMatieres(){
+  const set = new Set();
+  Object.values(EDT_TEMPLATE).forEach(day => day.forEach(s => { if (s.matiere) set.add(s.matiere); }));
+  Object.values(loadEdtOverride()).forEach(day => day.forEach(s => { if (s.matiere) set.add(s.matiere); }));
+  return Array.from(set).sort((a,b) => a.localeCompare(b));
+}
+function getAllModalites(){
+  const set = new Set();
+  Object.values(EDT_TEMPLATE).forEach(day => day.forEach(s => { if (s.modalite) set.add(s.modalite); }));
+  Object.values(loadEdtOverride()).forEach(day => day.forEach(s => { if (s.modalite) set.add(s.modalite); }));
+  return Array.from(set).sort((a,b) => a.localeCompare(b));
+}
+
+// Construit un <select> avec toutes les options + "Autre (écrire)" qui fait apparaître un champ libre
+function buildSelectWithAutre(options, currentValue, extraClass, placeholder, onChange){
+  const wrap = document.createElement('div');
+  wrap.className = 'edt-select-wrap';
+
+  const select = document.createElement('select');
+  select.className = 'edt-input ' + extraClass;
+
+  const emptyOpt = document.createElement('option');
+  emptyOpt.value = '';
+  emptyOpt.textContent = placeholder;
+  select.appendChild(emptyOpt);
+
+  options.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt;
+    o.textContent = opt;
+    select.appendChild(o);
+  });
+
+  const autreOpt = document.createElement('option');
+  autreOpt.value = AUTRE_VALUE;
+  autreOpt.textContent = 'Autre (écrire)';
+  select.appendChild(autreOpt);
+
+  const autreInput = document.createElement('input');
+  autreInput.type = 'text';
+  autreInput.className = 'edt-input ' + extraClass;
+  autreInput.placeholder = 'Préciser…';
+  autreInput.style.display = 'none';
+  autreInput.style.marginTop = '4px';
+
+  const isKnown = currentValue && options.includes(currentValue);
+  if (currentValue && !isKnown){
+    select.value = AUTRE_VALUE;
+    autreInput.value = currentValue;
+    autreInput.style.display = '';
+  } else {
+    select.value = currentValue || '';
+  }
+
+  function fireChange(){
+    const val = select.value === AUTRE_VALUE ? autreInput.value : select.value;
+    onChange(val);
+  }
+  select.addEventListener('change', () => {
+    autreInput.style.display = select.value === AUTRE_VALUE ? '' : 'none';
+    if (select.value === AUTRE_VALUE) autreInput.focus();
+    fireChange();
+  });
+  autreInput.addEventListener('input', fireChange);
+
+  wrap.appendChild(select);
+  wrap.appendChild(autreInput);
+  return wrap;
+}
+
+// Construit une icône ✎ qui affiche/masque une zone de texte au clic, plutôt que
+// d'occuper de la place en permanence. Retourne le wrapper (bouton + textarea).
+function buildNoteToggle(initialValue, placeholder, onSave, extraTaClass){
+  const wrap = document.createElement('div');
+  wrap.className = 'note-wrap';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'note-toggle-btn' + (initialValue && initialValue.trim() ? ' has-note' : '');
+  btn.innerHTML = '✎';
+  btn.title = 'Ajouter / modifier une note';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'free note-textarea' + (extraTaClass ? ' ' + extraTaClass : '');
+  ta.placeholder = placeholder || '';
+  ta.value = initialValue || '';
+  ta.style.display = 'none';
+
+  btn.addEventListener('click', () => {
+    const show = ta.style.display === 'none';
+    ta.style.display = show ? 'block' : 'none';
+    if (show) ta.focus();
+  });
+  ta.addEventListener('input', () => {
+    btn.classList.toggle('has-note', !!ta.value.trim());
+    onSave(ta.value);
+  });
+
+  wrap.appendChild(btn);
+  wrap.appendChild(ta);
+  wrap._textarea = ta;
+  wrap._btn = btn;
+  return wrap;
+}
+
+function updateSlotField(wd, idx, field, value){
+  const override = loadEdtOverride();
+  const current = override[wd] || cloneSlots(getEffectiveSlots(wd));
+  current[idx] = Object.assign({}, current[idx], { [field]: value });
+  override[wd] = current;
+  saveEdtOverride(override);
+}
+
+// Construit une carte de créneau éditable pour un jour donné. Réutilisée par la vue
+// mobile (un jour) et la vue semaine complète (desktop).
+function buildEdtCard(wd, slot, idx, matiereOptions, modaliteOptions, onDelete){
+  const card = document.createElement('div');
+  card.className = 'edt-card';
+
+  const row1 = document.createElement('div');
+  row1.className = 'edt-row';
+
+  const heureInput = document.createElement('input');
+  heureInput.type = 'text';
+  heureInput.className = 'edt-input edt-heure';
+  heureInput.placeholder = 'Heure';
+  heureInput.value = slot.heure || '';
+  heureInput.addEventListener('input', () => updateSlotField(wd, idx, 'heure', heureInput.value));
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'edt-del';
+  delBtn.textContent = '✕';
+  delBtn.addEventListener('click', () => {
+    const override = loadEdtOverride();
+    const current = override[wd] || cloneSlots(getEffectiveSlots(wd));
+    current.splice(idx, 1);
+    override[wd] = current;
+    saveEdtOverride(override);
+    onDelete();
+  });
+
+  const matiereWrap = buildSelectWithAutre(matiereOptions, slot.matiere, 'edt-matiere', 'Matière', (val) => {
+    updateSlotField(wd, idx, 'matiere', val);
+  });
+
+  row1.appendChild(heureInput);
+  row1.appendChild(matiereWrap);
+  row1.appendChild(delBtn);
+  card.appendChild(row1);
+
+  const row2 = document.createElement('div');
+  row2.className = 'edt-row';
+  const modaliteWrap = buildSelectWithAutre(modaliteOptions, slot.modalite, 'edt-modalite', 'Modalité', (val) => {
+    updateSlotField(wd, idx, 'modalite', val);
+  });
+  row2.appendChild(modaliteWrap);
+  card.appendChild(row2);
+
+  const noteToggle = buildNoteToggle(slot.competence, 'Compétence / description (optionnel)', (val) => {
+    updateSlotField(wd, idx, 'competence', val || null);
+  }, 'edt-comp');
+  card.appendChild(noteToggle);
+
+  return card;
+}
+
+function renderEdt(){
+  const wd = document.getElementById('edtWeekday').value;
+  const slots = getEffectiveSlots(wd) || [];
+  const container = document.getElementById('edtContent');
+  container.innerHTML = '';
+
+  if (slots.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Aucun créneau pour ce jour — ajoute-en un.";
+    container.appendChild(note);
+  }
+
+  const matiereOptions = getAllMatieres();
+  const modaliteOptions = getAllModalites();
+
+  slots.forEach((slot, idx) => {
+    container.appendChild(buildEdtCard(wd, slot, idx, matiereOptions, modaliteOptions, renderEdtAll));
+  });
+}
+
+const EDT_WEEKDAYS = ['lundi', 'mardi', 'jeudi', 'vendredi'];
+const EDT_WEEKDAY_LABELS = { lundi: 'Lundi', mardi: 'Mardi', jeudi: 'Jeudi', vendredi: 'Vendredi' };
+
+function renderEdtWeek(){
+  const grid = document.getElementById('edtWeekGrid');
+  grid.innerHTML = '';
+  const matiereOptions = getAllMatieres();
+  const modaliteOptions = getAllModalites();
+
+  EDT_WEEKDAYS.forEach(wd => {
+    const col = document.createElement('div');
+    col.className = 'edt-day-col';
+
+    const h3 = document.createElement('h3');
+    const label = document.createElement('span');
+    label.textContent = EDT_WEEKDAY_LABELS[wd];
+    h3.appendChild(label);
+
+    const dayActions = document.createElement('div');
+    dayActions.className = 'edt-day-actions';
+
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ créneau';
+    addBtn.addEventListener('click', () => {
+      const override = loadEdtOverride();
+      const current = override[wd] || cloneSlots(getEffectiveSlots(wd));
+      current.push({ heure: '', matiere: '', modalite: '', competence: null });
+      override[wd] = current;
+      saveEdtOverride(override);
+      renderEdtAll();
+    });
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copier';
+    copyBtn.addEventListener('click', () => copyEdtDayToClipboard(wd));
+
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'Réinit.';
+    resetBtn.addEventListener('click', () => {
+      const override = loadEdtOverride();
+      delete override[wd];
+      saveEdtOverride(override);
+      renderEdtAll();
+      showToast(`${EDT_WEEKDAY_LABELS[wd]} réinitialisé`);
+    });
+
+    dayActions.appendChild(addBtn);
+    dayActions.appendChild(copyBtn);
+    dayActions.appendChild(resetBtn);
+    h3.appendChild(dayActions);
+    col.appendChild(h3);
+
+    const slots = getEffectiveSlots(wd) || [];
+    if (slots.length === 0){
+      const note = document.createElement('div');
+      note.className = 'empty-note';
+      note.textContent = "Aucun créneau.";
+      col.appendChild(note);
+    }
+    slots.forEach((slot, idx) => {
+      col.appendChild(buildEdtCard(wd, slot, idx, matiereOptions, modaliteOptions, renderEdtAll));
+    });
+
+    grid.appendChild(col);
+  });
+}
+
+function renderEdtAll(){
+  renderEdt();
+  renderEdtWeek();
+}
+
+function addEdtSlot(){
+  const wd = document.getElementById('edtWeekday').value;
+  const override = loadEdtOverride();
+  const current = override[wd] || cloneSlots(getEffectiveSlots(wd));
+  current.push({ heure: '', matiere: '', modalite: '', competence: null });
+  override[wd] = current;
+  saveEdtOverride(override);
+  renderEdtAll();
+}
+
+function resetEdtDay(){
+  const wd = document.getElementById('edtWeekday').value;
+  const override = loadEdtOverride();
+  delete override[wd];
+  saveEdtOverride(override);
+  renderEdtAll();
+  showToast('Jour réinitialisé à partir des données d\'origine');
+}
+
+function copyEdtDayToClipboard(wd){
+  const slots = getEffectiveSlots(wd) || [];
+  if (slots.length === 0){ showToast('Rien à copier pour ce jour'); return; }
+  const lines = slots.map(s => [s.heure || '', s.matiere || '', s.modalite || '', s.competence || ''].join('\t'));
+  safeCopyText(lines.join('\n'), `Copié — colle à partir de la colonne "Heure" du bloc ${wd} dans "Emploi du temps"`);
+}
+
+function copyEdtToClipboard(){
+  const wd = document.getElementById('edtWeekday').value;
+  copyEdtDayToClipboard(wd);
+}
+
+// ---------- APC ----------
+function renderApc(){
+  const container = document.getElementById('apcContent');
+  container.innerHTML = '';
+  const store = loadEvalStore();
+
+  if (store.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Pas encore de résultats d'évaluation enregistrés — passe par l'onglet Évaluations.";
+    container.appendChild(note);
+    return;
+  }
+
+  // domaine -> élève -> { total, count }
+  const byDomain = {};
+  store.forEach(r => {
+    const dom = r.domaine || '(sans domaine)';
+    byDomain[dom] = byDomain[dom] || {};
+    byDomain[dom][r.eleve] = byDomain[dom][r.eleve] || { total: 0, count: 0 };
+    byDomain[dom][r.eleve].total += parseInt(r.score, 10) || 0;
+    byDomain[dom][r.eleve].count += 1;
+  });
+
+  let anyFlag = false;
+  Object.keys(byDomain).sort().forEach(dom => {
+    const flagged = Object.entries(byDomain[dom])
+      .filter(([, s]) => s.total === 0)
+      .sort((a, b) => a[0].localeCompare(b[0]));
+    if (flagged.length === 0) return;
+    anyFlag = true;
+
+    const block = document.createElement('div');
+    block.className = 'apc-domain';
+    const h3 = document.createElement('h3');
+    h3.textContent = dom;
+    block.appendChild(h3);
+
+    flagged.forEach(([name, s]) => {
+      const row = document.createElement('div');
+      row.className = 'apc-student';
+      const span = document.createElement('span');
+      span.textContent = name;
+      row.appendChild(span);
+      const note = document.createElement('span');
+      note.className = 'apc-note';
+      note.textContent = `0 sur ${s.count} évaluation${s.count > 1 ? 's' : ''}`;
+      row.appendChild(note);
+      block.appendChild(row);
+    });
+
+    container.appendChild(block);
+  });
+
+  if (!anyFlag){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Aucune difficulté détectée pour l'instant — chaque élève a au moins une validation dans chaque domaine évalué.";
+    container.appendChild(note);
+  }
+}
+
+// ---------- Toast ----------
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+// ---------- Tabs ----------
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'suivi') renderSuivi();
+    if (btn.dataset.tab === 'observations'){
+      syncObsFromSheet().then(renderObservations);
+      renderObservations();
+    }
+    if (btn.dataset.tab === 'apc') renderApc();
+    if (btn.dataset.tab === 'edt') renderEdtAll();
+    if (btn.dataset.tab === 'comportement') renderComportJour(document.getElementById('comportDate').value);
+  });
+});
+
+// ---------- Comportement ----------
+const COMPORT_KEY = 'cahier_de_classe_comportement_v1';
+const COMPORT_QUARTERS = ['8h30', '10h05', '13h30', '15h'];
+const RAPPEL_STATES = [
+  { bg: '#FFFFFF', border: '#E4DCC9', label: '' },
+  { bg: '#FFF3B0', border: '#E0C64A', label: '1' },
+  { bg: '#FFB74D', border: '#E0932A', label: '2' },
+  { bg: '#EF5350', border: '#C62828', label: '3' },
+  { bg: '#7B4FA0', border: '#5C3A78', label: '☎' }
+];
+const RAPPEL_TITLES = [
+  'Rien à signaler (taper pour ajouter un rappel)',
+  '1er rappel',
+  '2e rappel — étoile du jour perdue',
+  '3e rappel — exclusion momentanée',
+  'Contacter les parents'
+];
+
+function loadComportStore(){
+  try{ return JSON.parse(localStorage.getItem(COMPORT_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function saveComportStore(arr){
+  try{ localStorage.setItem(COMPORT_KEY, JSON.stringify(arr)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function getComportRecord(dateStr, eleve){
+  const store = loadComportStore();
+  return store.find(r => r.date === dateStr && r.eleve === eleve) || { date: dateStr, eleve, quarters: [0,0,0,0] };
+}
+function upsertComportRecord(rec){
+  const store = loadComportStore();
+  const idx = store.findIndex(r => r.date === rec.date && r.eleve === rec.eleve);
+  if (idx >= 0) store[idx] = rec; else store.push(rec);
+  saveComportStore(store);
+}
+function dayStarEarned(quarters){
+  return quarters.every(c => (c || 0) < 2);
+}
+
+function renderComportJour(dateStr){
+  document.getElementById('comportDate').value = dateStr;
+  document.getElementById('comportDayLabel').textContent = dayLabelFr(dateStr);
+  const container = document.getElementById('comportJourContent');
+  container.innerHTML = '';
+
+  STUDENTS.forEach(name => {
+    const rec = getComportRecord(dateStr, name);
+    const row = document.createElement('div');
+    row.className = 'comport-row';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'comport-name';
+    nameEl.textContent = name;
+    row.appendChild(nameEl);
+
+    const quartersWrap = document.createElement('div');
+    quartersWrap.className = 'comport-quarters';
+
+    const quarters = rec.quarters.slice();
+    const cells = [];
+    quarters.forEach((val, qi) => {
+      const cell = document.createElement('div');
+      cell.className = 'comport-cell';
+      const state = RAPPEL_STATES[val] || RAPPEL_STATES[0];
+      cell.style.background = state.bg;
+      cell.style.borderColor = state.border;
+      cell.textContent = state.label;
+      cell.title = `${COMPORT_QUARTERS[qi]} — ${RAPPEL_TITLES[val]}`;
+      cell.addEventListener('click', () => {
+        quarters[qi] = (quarters[qi] + 1) % RAPPEL_STATES.length;
+        upsertComportRecord({ date: dateStr, eleve: name, quarters });
+        renderComportJour(dateStr);
+      });
+      cells.push(cell);
+      quartersWrap.appendChild(cell);
+    });
+    row.appendChild(quartersWrap);
+
+    const star = document.createElement('span');
+    star.className = 'comport-star';
+    star.textContent = dayStarEarned(quarters) ? '⭐' : '☆';
+    star.title = dayStarEarned(quarters) ? 'Étoile du jour gagnée' : 'Étoile du jour perdue';
+    row.appendChild(star);
+
+    container.appendChild(row);
+  });
+}
+
+function shiftComportDay(delta){
+  const cur = document.getElementById('comportDate').value;
+  renderComportJour(addDays(cur, delta));
+}
+
+function populateComportStudentSelect(){
+  const sel = document.getElementById('comportStudent');
+  if (sel.options.length > 0) return;
+  STUDENTS.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    sel.appendChild(opt);
+  });
+}
+
+// Renvoie toutes les dates de classe (lundi/mardi/jeudi/vendredi) entre le début
+// de l'année scolaire (déduit des données sources) et une date de fin incluse.
+function getSchoolYearStart(){
+  // La vraie rentrée a eu lieu le jeudi 3 septembre 2026 (les entrées du
+  // 31 août / 1er septembre dans les feuilles sources sont un modèle générique,
+  // pas des jours de classe réels).
+  return '2026-09-03';
+}
+function getAllSchoolDaysUpTo(endDateStr){
+  const start = getSchoolYearStart();
+  const days = [];
+  let d = start;
+  let guard = 0;
+  while (d <= endDateStr && guard < 400){
+    const wd = weekdayNameFr(d);
+    if (['lundi','mardi','jeudi','vendredi'].includes(wd)) days.push(d);
+    d = addDays(d, 1);
+    guard++;
+  }
+  return days;
+}
+
+function renderComportEleve(){
+  populateComportStudentSelect();
+  const student = document.getElementById('comportStudent').value;
+  const container = document.getElementById('comportEleveContent');
+  container.innerHTML = '';
+
+  const todayStr = fmtDate(new Date());
+  const allDays = getAllSchoolDaysUpTo(todayStr);
+  const recordsByDate = {};
+  loadComportStore().filter(r => r.eleve === student).forEach(r => { recordsByDate[r.date] = r; });
+
+  // Par défaut, un jour de classe sans rappel enregistré = étoile gagnée.
+  const store = allDays
+    .map(date => recordsByDate[date] || { date, eleve: student, quarters: [0,0,0,0] })
+    .sort((a,b) => b.date.localeCompare(a.date));
+
+  if (store.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Aucun jour de classe trouvé pour le moment.";
+    container.appendChild(note);
+    return;
+  }
+
+  const starsEarned = store.filter(r => dayStarEarned(r.quarters)).length;
+  const summary = document.createElement('div');
+  summary.className = 'comport-summary';
+  summary.textContent = `⭐ ${starsEarned} étoile${starsEarned>1?'s':''} sur ${store.length} jour${store.length>1?'s':''} de classe`;
+  container.appendChild(summary);
+
+  store.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'comport-history-row';
+
+    const dateEl = document.createElement('span');
+    dateEl.className = 'comport-history-date';
+    dateEl.textContent = r.date;
+    row.appendChild(dateEl);
+
+    r.quarters.forEach((val, qi) => {
+      const dot = document.createElement('span');
+      dot.className = 'comport-legend-dot';
+      const state = RAPPEL_STATES[val] || RAPPEL_STATES[0];
+      dot.style.background = state.bg;
+      dot.style.borderColor = state.border;
+      dot.title = `${COMPORT_QUARTERS[qi]} — ${RAPPEL_TITLES[val]}`;
+      row.appendChild(dot);
+    });
+
+    const star = document.createElement('span');
+    star.textContent = dayStarEarned(r.quarters) ? '⭐' : '☆';
+    row.appendChild(star);
+
+    container.appendChild(row);
+  });
+}
+
+function switchComportSubtab(sub){
+  document.querySelectorAll('.comport-subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.sub === sub));
+  document.getElementById('comportJourView').style.display = sub === 'jour' ? '' : 'none';
+  document.getElementById('comportEleveView').style.display = sub === 'eleve' ? '' : 'none';
+  if (sub === 'eleve') renderComportEleve();
+}
+
+// ---------- Init ----------
+(function init(){
+ try {
+  // find a sensible default date: today if within range, else earliest date found
+  let allDates = [];
+  Object.values(SUBJECT_DATA).forEach(s => Object.values(s.date_cols).forEach(d => allDates.push(d)));
+  allDates.sort();
+  const todayStr = fmtDate(new Date());
+  const defaultDate = (todayStr >= allDates[0] && todayStr <= allDates[allDates.length-1]) ? todayStr : allDates[0];
+
+  renderJournal(defaultDate);
+  renderDevoirs(addDays(defaultDate, 1));
+
+  document.getElementById('journalDate').addEventListener('change', e => renderJournal(e.target.value));
+  document.getElementById('prevDay').addEventListener('click', ()=>shiftJournalDay(-1));
+  document.getElementById('nextDay').addEventListener('click', ()=>shiftJournalDay(1));
+  document.getElementById('copyJournal').addEventListener('click', copyJournalToClipboard);
+
+  document.getElementById('hwDate').addEventListener('change', e => renderDevoirs(e.target.value));
+  document.getElementById('prevDayHw').addEventListener('click', ()=>shiftHwDay(-1));
+  document.getElementById('nextDayHw').addEventListener('click', ()=>shiftHwDay(1));
+  document.getElementById('copyHw').addEventListener('click', copyHwToClipboard);
+
+  renderEvaluations(defaultDate);
+  document.getElementById('evalDate').addEventListener('change', e => renderEvaluations(e.target.value));
+  document.getElementById('prevDayEval').addEventListener('click', ()=>shiftEvalDay(-1));
+  document.getElementById('nextDayEval').addEventListener('click', ()=>shiftEvalDay(1));
+  document.getElementById('copyEval').addEventListener('click', copyEvaluationsToClipboard);
+
+  populateSuiviSelect();
+  renderSuivi();
+  document.getElementById('suiviStudent').addEventListener('change', renderSuivi);
+  document.getElementById('suiviDiscipline').addEventListener('change', renderSuivi);
+  document.getElementById('suiviDomaine').addEventListener('change', renderSuivi);
+
+  renderObservations();
+  document.getElementById('copyObs').addEventListener('click', copyObsToClipboard);
+  document.getElementById('obsStudentFilter').addEventListener('change', renderObservations);
+
+  renderApc();
+
+  renderEdtAll();
+  document.getElementById('edtWeekday').addEventListener('change', renderEdt);
+  document.getElementById('addEdtSlot').addEventListener('click', addEdtSlot);
+  document.getElementById('copyEdt').addEventListener('click', copyEdtToClipboard);
+  document.getElementById('resetEdt').addEventListener('click', resetEdtDay);
+
+  renderComportJour(defaultDate);
+  document.getElementById('comportDate').addEventListener('change', e => renderComportJour(e.target.value));
+  document.getElementById('prevDayComport').addEventListener('click', ()=>shiftComportDay(-1));
+  document.getElementById('nextDayComport').addEventListener('click', ()=>shiftComportDay(1));
+  document.querySelectorAll('.comport-subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchComportSubtab(btn.dataset.sub));
+  });
+  document.getElementById('comportStudent').addEventListener('change', renderComportEleve);
+ } catch(err){
+  const main = document.querySelector('main');
+  if (main){
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:#FDEFEF;border:1px solid #DC143C;border-radius:10px;padding:14px;margin:14px 0;font-family:-apple-system,sans-serif;font-size:0.85rem;color:#5a1010;';
+    banner.textContent = "Une erreur technique a empêché l'application de se charger correctement : " + (err && err.message ? err.message : String(err)) + ". Envoie une capture de ce message.";
+    main.prepend(banner);
+  }
+  console.error('Erreur init cahier de classe:', err);
+ }
+})();
+
+</script>
+</body>
+</html>
