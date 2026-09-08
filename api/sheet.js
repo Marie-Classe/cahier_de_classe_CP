@@ -4,9 +4,13 @@
 // GET  /api/sheet?tab=Observations
 //      -> { rows: [ [colA, colB, ...], ... ] }  (toutes les lignes, en-tête comprise)
 //
-// POST /api/sheet   body JSON: { tab: "Observations", row: ["2026-09-10", "Adel", "..."] }
-//      -> ajoute une ligne à la fin de l'onglet indiqué
-//      -> { ok: true }
+// POST /api/sheet   body JSON: { tab: "Observations", row: [...] }
+//      -> ajoute une ligne à la fin de l'onglet (journal, pas de mise à jour)
+//
+// POST /api/sheet   body JSON: { tab: "Évaluation", row: [...], matchColumns: [0,3,4] }
+//      -> cherche une ligne existante dont les colonnes indiquées (index 0 = colonne A)
+//         correspondent déjà à "row" ; si trouvée, la remplace ; sinon, l'ajoute.
+//         (utile pour Comportement/Évaluations où une même case peut être corrigée)
 
 const { getSheetsClient } = require('./lib/google');
 
@@ -37,11 +41,37 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST'){
-      const { tab, row } = req.body || {};
+      const { tab, row, matchColumns } = req.body || {};
       if (!tab || !Array.isArray(row)){
         res.status(400).json({ error: "Corps attendu : { tab: string, row: string[] }" });
         return;
       }
+
+      if (Array.isArray(matchColumns) && matchColumns.length > 0){
+        const existing = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: `${tab}!A:Z`
+        });
+        const values = existing.data.values || [];
+        let matchIndex = -1; // index dans "values" (0 = en-tête)
+        for (let i = 1; i < values.length; i++){
+          const r = values[i];
+          const isMatch = matchColumns.every(ci => String(r[ci] || '') === String(row[ci] || ''));
+          if (isMatch){ matchIndex = i; break; }
+        }
+        if (matchIndex >= 0){
+          const sheetRowNumber = matchIndex + 1; // values[i] correspond à la ligne (i+1) de la feuille
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: `${tab}!A${sheetRowNumber}:Z${sheetRowNumber}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [row] }
+          });
+          res.status(200).json({ ok: true, updated: true });
+          return;
+        }
+      }
+
       await sheets.spreadsheets.values.append({
         spreadsheetId: sheetId,
         range: `${tab}!A:Z`,
@@ -49,7 +79,7 @@ module.exports = async (req, res) => {
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: [row] }
       });
-      res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true, appended: true });
       return;
     }
 
