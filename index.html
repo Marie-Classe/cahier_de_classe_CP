@@ -1875,6 +1875,32 @@ function renderSuivi(){
   });
 }
 
+// ---------- Connexion au backend (Google Sheets via Vercel) ----------
+const SHEET_API_URL = 'https://cahier-de-classe-cp.vercel.app/api/sheet';
+
+async function sheetGetRows(tab){
+  try{
+    const resp = await fetch(`${SHEET_API_URL}?tab=${encodeURIComponent(tab)}`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.rows || [];
+  }catch(e){
+    return null; // hors-ligne ou backend indisponible : on continue avec le local uniquement
+  }
+}
+async function sheetSaveRow(tab, row, matchColumns){
+  try{
+    await fetch(SHEET_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tab, row, matchColumns })
+    });
+    return true;
+  }catch(e){
+    return false; // hors-ligne : la donnée reste dans le stockage local en attendant
+  }
+}
+
 // ---------- Observations ----------
 const OBS_STORAGE_KEY = 'cahier_de_classe_obs_v1';
 
@@ -1888,8 +1914,31 @@ function saveObsStore(arr){
 }
 function addObservation(eleve, texte){
   const store = loadObsStore();
-  store.push({ date: fmtDate(new Date()), eleve, texte, copied: false });
+  const date = fmtDate(new Date());
+  store.push({ date, eleve, texte, copied: false });
   saveObsStore(store);
+  sheetSaveRow('Observations', [date, eleve, texte]); // envoi immédiat au Google Sheet
+}
+
+// Récupère les observations déjà présentes dans le Google Sheet (faites depuis un autre
+// appareil) et les fusionne avec celles du stockage local de cet appareil.
+async function syncObsFromSheet(){
+  const rows = await sheetGetRows('Observations');
+  if (!rows || rows.length <= 1) return; // pas de données, ou juste l'en-tête
+  const local = loadObsStore();
+  const known = new Set(local.map(o => `${o.date}|${o.eleve}|${o.texte}`));
+  let added = false;
+  rows.slice(1).forEach(r => {
+    const [date, eleve, texte] = r;
+    if (!date || !eleve) return;
+    const key = `${date}|${eleve}|${texte || ''}`;
+    if (!known.has(key)){
+      local.push({ date, eleve, texte: texte || '', copied: true });
+      known.add(key);
+      added = true;
+    }
+  });
+  if (added) saveObsStore(local);
 }
 
 function populateObsFilter(){
@@ -2338,7 +2387,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.add('active');
     document.getElementById(btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'suivi') renderSuivi();
-    if (btn.dataset.tab === 'observations') renderObservations();
+    if (btn.dataset.tab === 'observations'){
+      syncObsFromSheet().then(renderObservations);
+      renderObservations();
+    }
     if (btn.dataset.tab === 'apc') renderApc();
     if (btn.dataset.tab === 'edt') renderEdtAll();
     if (btn.dataset.tab === 'comportement') renderComportJour(document.getElementById('comportDate').value);
