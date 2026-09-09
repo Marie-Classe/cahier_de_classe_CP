@@ -1414,6 +1414,14 @@ function safeCopyText(text, successMsg){
   }
 }
 
+// Construit une formule LIEN_HYPERTEXTE (Google Sheets en français) pour que le titre
+// colle directement comme lien cliquable dans une seule cellule.
+function buildHyperlinkFormula(url, label){
+  const safeUrl = String(url).replace(/"/g, '""');
+  const safeLabel = String(label).replace(/"/g, '""');
+  return `=LIEN_HYPERTEXTE("${safeUrl}";"${safeLabel}")`;
+}
+
 function copyJournalToClipboard(){
   const dateStr = document.getElementById('journalDate').value;
   const wd = weekdayNameFr(dateStr);
@@ -1424,7 +1432,9 @@ function copyJournalToClipboard(){
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
     const found = (colorName && subjectKey) ? getEntryForModality(subjectKey, dateStr, colorName) : null;
     if (found){
-      lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, found.title + (found.extra ? ` — ${found.extra}` : ''), found.link || '', ''].join('\t'));
+      const label = found.title + (found.extra ? ` — ${found.extra}` : '');
+      const titreCell = found.link ? buildHyperlinkFormula(found.link, label) : label;
+      lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', ''].join('\t'));
     } else {
       const ta = document.querySelector(`textarea[data-slot-idx="${idx}"]`);
       const txt = ta ? ta.value.trim() : '';
