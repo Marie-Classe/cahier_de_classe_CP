@@ -259,7 +259,7 @@
   button.primary:active{ opacity:0.85; }
   .toast{
     position:fixed;
-    bottom: 24px;
+    bottom: calc(78px + env(safe-area-inset-bottom, 0px));
     left:50%;
     transform: translateX(-50%);
     background: var(--ink);
@@ -271,6 +271,9 @@
     opacity:0;
     pointer-events:none;
     transition: opacity 0.25s ease;
+    z-index: 100;
+    max-width: 88vw;
+    text-align: center;
   }
   .toast.show{ opacity:1; }
 
@@ -2473,7 +2476,8 @@ function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2600);
+  const duration = msg && msg.startsWith('⚠️') ? 6000 : 2600; // laisse plus de temps pour lire une erreur
+  setTimeout(()=>t.classList.remove('show'), duration);
 }
 
 // ---------- Tabs ----------
