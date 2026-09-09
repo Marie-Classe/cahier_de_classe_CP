@@ -1937,13 +1937,20 @@ async function sheetGetRows(tab){
 }
 async function sheetSaveRow(tab, row, matchColumns){
   try{
-    await fetch(SHEET_API_URL, {
+    const resp = await fetch(SHEET_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tab, row, matchColumns })
     });
+    if (!resp.ok){
+      let msg = resp.status;
+      try{ const j = await resp.json(); if (j.error) msg = j.error; }catch(e2){}
+      showToast('⚠️ Sheet non mis à jour : ' + msg);
+      return false;
+    }
     return true;
   }catch(e){
+    showToast('⚠️ Sheet injoignable (hors-ligne ?) : ' + e.message);
     return false; // hors-ligne : la donnée reste dans le stockage local en attendant
   }
 }
@@ -2177,12 +2184,17 @@ const EDT_API_URL = 'https://cahier-de-classe-cp.vercel.app/api/edt';
 async function syncEdtDayToSheet(wd){
   const slots = getEffectiveSlots(wd) || [];
   try{
-    await fetch(EDT_API_URL, {
+    const resp = await fetch(EDT_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ day: wd, slots })
     });
-  }catch(e){ /* hors-ligne : la donnée reste en local en attendant */ }
+    if (!resp.ok){
+      let msg = resp.status;
+      try{ const j = await resp.json(); if (j.error) msg = j.error; }catch(e2){}
+      showToast('⚠️ EDT non mis à jour : ' + msg);
+    }
+  }catch(e){ showToast('⚠️ EDT injoignable (hors-ligne ?) : ' + e.message); }
 }
 
 async function syncEdtDayFromSheet(wd){
