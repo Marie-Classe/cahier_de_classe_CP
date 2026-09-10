@@ -52,8 +52,15 @@ module.exports = async (req, res) => {
     Object.values(data).forEach(item => {
       if (item.type !== 'VEVENT' || !item.start) return;
 
-      // Gère les événements récurrents (ex. cours toutes les semaines) en plus des événements simples
-      const occurrences = [];
+      // L'heure de début/fin est TOUJOURS calculée depuis l'horaire d'origine de
+      // l'événement (fiable, correctement converti en heure de Paris). Pour un
+      // événement récurrent, seule la DATE de l'occurrence change, jamais l'heure —
+      // ça évite un bug de décalage horaire que la librairie de récurrence peut
+      // introduire sur les occurrences générées.
+      const originalStart = toParisParts(new Date(item.start));
+      const originalEnd = toParisParts(new Date(item.end || item.start));
+
+      const occurrenceDates = [];
       if (item.rrule) {
         try {
           // Fenêtre volontairement large (fuseau serveur ≠ Europe/Paris) ; le filtre
@@ -62,26 +69,24 @@ module.exports = async (req, res) => {
           windowStart.setUTCDate(windowStart.getUTCDate() - 1);
           const windowEnd = new Date(date + 'T23:59:59Z');
           windowEnd.setUTCDate(windowEnd.getUTCDate() + 1);
-          const dates = item.rrule.between(windowStart, windowEnd, true);
-          dates.forEach(d => occurrences.push(d));
+          item.rrule.between(windowStart, windowEnd, true).forEach(d => occurrenceDates.push(d));
         } catch (e) { /* règle de récurrence non gérée, on ignore */ }
       } else {
-        occurrences.push(new Date(item.start));
+        occurrenceDates.push(new Date(item.start));
       }
 
-      occurrences.forEach(startDate => {
-        const startP = toParisParts(startDate);
-        if (startP.dateStr !== date) return;
-        const durationMs = (new Date(item.end) - new Date(item.start)) || 30 * 60 * 1000;
-        const endDate = new Date(startDate.getTime() + durationMs);
-        const endP = toParisParts(endDate);
+      occurrenceDates.forEach(occDate => {
+        // On ne se sert de la date d'occurrence QUE pour savoir quel jour c'est,
+        // jamais pour l'heure (voir commentaire ci-dessus).
+        const occDay = toParisParts(occDate).dateStr;
+        if (occDay !== date) return;
         events.push({
           title: item.summary || '',
           description: item.description || '',
-          start: `${startP.hour}h${pad(startP.minute)}`,
-          end: `${endP.hour}h${pad(endP.minute)}`,
-          startMinutes: startP.hour * 60 + startP.minute,
-          endMinutes: endP.hour * 60 + endP.minute
+          start: `${originalStart.hour}h${pad(originalStart.minute)}`,
+          end: `${originalEnd.hour}h${pad(originalEnd.minute)}`,
+          startMinutes: originalStart.hour * 60 + originalStart.minute,
+          endMinutes: originalEnd.hour * 60 + originalEnd.minute
         });
       });
     });
