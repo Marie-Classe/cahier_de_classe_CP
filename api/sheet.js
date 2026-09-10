@@ -10,9 +10,14 @@
 // POST /api/sheet   body JSON: { tab: "Évaluation", row: [...], matchColumns: [0,3,4] }
 //      -> cherche une ligne existante dont les colonnes indiquées (index 0 = colonne A)
 //         correspondent déjà à "row" ; si trouvée, la remplace ; sinon, l'ajoute.
-//         (utile pour Comportement/Évaluations où une même case peut être corrigée)
 
 const { getSheetsClient } = require('./lib/google');
+
+function sheetIdPreview(id){
+  if (!id) return '(vide)';
+  if (id.length <= 10) return `"${id}" (${id.length} caractères)`;
+  return `"${id.slice(0,6)}...${id.slice(-4)}" (${id.length} caractères)`;
+}
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -85,6 +90,7 @@ module.exports = async (req, res) => {
 
     res.status(405).json({ error: 'Méthode non supportée.' });
   }catch(e){
-    res.status(500).json({ error: 'Erreur Google Sheets : ' + e.message });
+    res.status(500).json({ error: 'Erreur Google Sheets : ' + e.message + ' — SHEET_ID utilisé : ' + sheetIdPreview(sheetId) });
   }
 };
+    
