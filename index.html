@@ -824,7 +824,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-11 19h33 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-11 20h04 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1496,17 +1496,18 @@ function copyJournalToClipboard(){
     const found = (colorName && subjectKey) ? getEntryForModality(subjectKey, dateStr, colorName) : null;
     if (found){
       const label = found.title + (found.extra ? ` — ${found.extra}` : '');
-      // Colonnes : Date, Heure, Lien 1, Lien 2, Matière, Modalité, Titre, Notes
-      lines.push([dateStr, slot.heure || '', found.link || '', '', slot.matiere, found.modality, label, ''].join('\t'));
+      const titreCell = found.link ? buildHyperlinkFormula(found.link, label) : label;
+      // Colonnes : Date, Heure, Matière, Modalité, Titre (lien cliquable si dispo), Lien, Notes
+      lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', ''].join('\t'));
     } else {
       const ta = document.querySelector(`textarea[data-slot-idx="${idx}"]`);
       const txt = ta ? ta.value.trim() : '';
-      lines.push([dateStr, slot.heure || '', '', '', slot.matiere || '', slot.modalite || '', txt, ''].join('\t'));
+      lines.push([dateStr, slot.heure || '', slot.matiere || '', slot.modalite || '', txt, '', ''].join('\t'));
     }
   });
   const analyseTxt = document.getElementById('analyseText').value.trim();
   if (analyseTxt){
-    lines.push([dateStr, '', '', '', 'Analyse de pratique', '', analyseTxt, ''].join('\t'));
+    lines.push([dateStr, '', 'Analyse de pratique', '', analyseTxt, '', ''].join('\t'));
   }
   safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Cahier Journal" du Google Sheet');
 }
@@ -2533,22 +2534,27 @@ function renderApc(){
     return;
   }
 
-  // domaine -> élève -> { total, count }
+  // domaine -> titre d'évaluation -> liste des élèves avec leur score sur CETTE évaluation
+  // précise (on ne fait pas la somme de plusieurs évaluations du même domaine, pour ne pas
+  // masquer un vrai 0 sur une évaluation par un score positif obtenu sur une autre).
   const byDomain = {};
   store.forEach(r => {
     const dom = r.domaine || '(sans domaine)';
     byDomain[dom] = byDomain[dom] || {};
-    byDomain[dom][r.eleve] = byDomain[dom][r.eleve] || { total: 0, count: 0 };
-    byDomain[dom][r.eleve].total += parseInt(r.score, 10) || 0;
-    byDomain[dom][r.eleve].count += 1;
+    byDomain[dom][r.titre] = byDomain[dom][r.titre] || [];
+    byDomain[dom][r.titre].push({ eleve: r.eleve, score: parseInt(r.score, 10) || 0 });
   });
 
   let anyFlag = false;
   Object.keys(byDomain).sort().forEach(dom => {
-    const flagged = Object.entries(byDomain[dom])
-      .filter(([, s]) => s.total === 0)
-      .sort((a, b) => a[0].localeCompare(b[0]));
-    if (flagged.length === 0) return;
+    const domainRows = [];
+    Object.keys(byDomain[dom]).sort().forEach(titre => {
+      const flagged = byDomain[dom][titre]
+        .filter(e => e.score === 0)
+        .sort((a, b) => a.eleve.localeCompare(b.eleve));
+      flagged.forEach(e => domainRows.push({ eleve: e.eleve, titre }));
+    });
+    if (domainRows.length === 0) return;
     anyFlag = true;
 
     const block = document.createElement('div');
@@ -2557,15 +2563,15 @@ function renderApc(){
     h3.textContent = dom;
     block.appendChild(h3);
 
-    flagged.forEach(([name, s]) => {
+    domainRows.forEach(({ eleve, titre }) => {
       const row = document.createElement('div');
       row.className = 'apc-student';
       const span = document.createElement('span');
-      span.textContent = name;
+      span.textContent = eleve;
       row.appendChild(span);
       const note = document.createElement('span');
       note.className = 'apc-note';
-      note.textContent = `0 sur ${s.count} évaluation${s.count > 1 ? 's' : ''}`;
+      note.textContent = titre;
       row.appendChild(note);
       block.appendChild(row);
     });
@@ -2576,7 +2582,7 @@ function renderApc(){
   if (!anyFlag){
     const note = document.createElement('div');
     note.className = 'empty-note';
-    note.textContent = "Aucune difficulté détectée pour l'instant — chaque élève a au moins une validation dans chaque domaine évalué.";
+    note.textContent = "Aucune difficulté détectée pour l'instant — chaque élève a au moins une validation sur chaque évaluation.";
     container.appendChild(note);
   }
 }
@@ -2608,7 +2614,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       syncObsFromSheet().then(renderObservations);
       renderObservations();
     }
-    if (btn.dataset.tab === 'apc') renderApc();
+    if (btn.dataset.tab === 'apc'){
+      syncEvalFromSheet().then(renderApc);
+      renderApc();
+    }
     if (btn.dataset.tab === 'edt'){
       syncAllEdtFromSheet().then(renderEdtAll);
       renderEdtAll();
