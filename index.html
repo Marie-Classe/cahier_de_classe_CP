@@ -99,7 +99,7 @@
   @media (min-width: 860px){
     main{ max-width: 1400px; }
     #journalContent{
-      column-width: 300px;
+      column-count: 2;
       column-gap: 12px;
     }
     #journalContent .subject-card{
@@ -160,6 +160,7 @@
     justify-content:space-between;
   }
   .subject-body{ padding: 12px 16px 16px; }
+  .subject-body-compact{ padding: 0 16px 6px; }
   .entry{
     display:flex;
     gap:10px;
@@ -211,6 +212,60 @@
     text-decoration: none;
   }
   .badge-link:hover{ text-decoration: underline; }
+
+  .slot-line{
+    padding: 0;
+  }
+  .slot-row{
+    display:flex;
+    align-items:center;
+    gap: 7px;
+    padding: 10px 14px;
+    flex-wrap: wrap;
+  }
+  .slot-icon{
+    font-size: 1.05rem;
+    flex-shrink:0;
+    line-height:1;
+  }
+  .slot-title{
+    font-size: 0.92rem;
+    font-weight:600;
+    color: var(--ink);
+  }
+  .slot-desc{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+  }
+  .slot-link-icon{
+    text-decoration:none;
+    font-size: 0.95rem;
+    flex-shrink:0;
+  }
+  .slot-spacer{ flex: 1 1 auto; min-width: 6px; }
+  .slot-heure{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    flex-shrink:0;
+    white-space:nowrap;
+  }
+  .subject-card.card-done .slot-title{
+    color: var(--card-mod-color, var(--ink));
+    font-weight: 700;
+  }
+  .slot-line .note-textarea{
+    margin: 0 14px 10px;
+    width: calc(100% - 28px);
+  }
+  .entry-compact{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .entry-compact .entry-title{ font-size: 0.92rem; }
   textarea.free{
     width:100%;
     min-height: 16px;
@@ -476,6 +531,12 @@
     margin-right:5px;
     vertical-align:middle;
   }
+  .comport-legend-dot-editable{
+    cursor: pointer;
+    width:16px; height:16px;
+    transition: transform 0.1s ease;
+  }
+  .comport-legend-dot-editable:active{ transform: scale(0.85); }
   .comport-row{
     display:flex;
     align-items:center;
@@ -763,7 +824,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-10 03h13 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-11 19h33 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1194,6 +1255,39 @@ function buildDoneCheckbox(dateStr, idx){
   return cb;
 }
 
+// Icône par matière/discipline, pour un affichage compact sur une seule ligne.
+const MATIERE_ICON = {
+  "Oral": "🗣️",
+  "Lecture": "📖",
+  "Compréhension": "🧩",
+  "Graphie": "✍️",
+  "Dictée": "📝",
+  "Rédaction": "🖋️",
+  "Calcul mental": "🔢",
+  "Problèmes": "➗",
+  "Maths": "📐",
+  "EDL": "🔤",
+  "Anglais": "🇬🇧",
+  "HGScEmcEvar": "🌍",
+  "Ed° musicale": "🎵",
+  "Art": "🎨",
+  "Fluence": "⏱️",
+  "EPS": "🤸",
+  "Français": "📚",
+  "Récréation": "⚽",
+  "Cantine": "🍽️",
+  "Accueil": "🚪",
+  "Autonomie": "🧠",
+  "Sortie": "🚶",
+  "Classe": "🏫",
+  "Cartable": "🎒",
+  "Culture relig": "📘",
+  "Histoire": "🏺"
+};
+function matiereIcon(matiere){
+  return MATIERE_ICON[matiere] || "📌";
+}
+
 async function renderJournal(dateStr){
   const mySeq = ++journalRenderSeq;
   document.getElementById('journalDate').value = dateStr;
@@ -1236,65 +1330,46 @@ async function renderJournal(dateStr){
     if (agendaEvent) usedAgendaEvents.add(agendaEvent);
 
     const card = document.createElement('div');
-    card.className = 'subject-card';
+    card.className = 'subject-card slot-line';
 
     if (agendaEvent){
-      const h3 = document.createElement('h3');
+      const row = document.createElement('div');
+      row.className = 'slot-row';
+
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'slot-icon';
+      iconSpan.textContent = '📅';
+      row.appendChild(iconSpan);
+
+      const titleText = document.createElement('span');
+      titleText.className = 'slot-title';
+      titleText.textContent = agendaEvent.title || '(sans titre)';
+      row.appendChild(titleText);
+
+      if (agendaEvent.description){
+        const descBtn = document.createElement('span');
+        descBtn.className = 'slot-desc';
+        descBtn.textContent = agendaEvent.description;
+        row.appendChild(descBtn);
+      }
+
+      const spacer = document.createElement('span');
+      spacer.className = 'slot-spacer';
+      row.appendChild(spacer);
+
+      row.appendChild(buildDoneCheckbox(dateStr, idx));
+
       const heureSpan = document.createElement('span');
+      heureSpan.className = 'slot-heure';
       heureSpan.textContent = `${agendaEvent.start}–${agendaEvent.end}`;
-      heureSpan.style.fontSize = '0.8rem';
-      heureSpan.style.color = 'var(--ink-soft)';
-      heureSpan.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      const headerRightAgenda = document.createElement('span');
-      headerRightAgenda.style.display = 'flex';
-      headerRightAgenda.style.alignItems = 'center';
-      headerRightAgenda.style.gap = '8px';
-      headerRightAgenda.appendChild(buildDoneCheckbox(dateStr, idx));
-      headerRightAgenda.appendChild(heureSpan);
-      h3.innerHTML = `<span>${agendaEvent.title || '(sans titre)'}</span>`;
-      h3.appendChild(headerRightAgenda);
-      card.appendChild(h3);
+      row.appendChild(heureSpan);
+
+      card.appendChild(row);
       card.style.setProperty('--card-mod-color', 'var(--gold)');
       if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
-
-      const body = document.createElement('div');
-      body.className = 'subject-body';
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.style.background = 'var(--gold)';
-      badge.textContent = '📅 Agenda';
-      badge.style.marginBottom = '6px';
-      badge.style.display = 'inline-block';
-      body.appendChild(badge);
-      if (agendaEvent.description){
-        const desc = document.createElement('div');
-        desc.className = 'entry-meta';
-        desc.textContent = agendaEvent.description;
-        body.appendChild(desc);
-      }
-      card.appendChild(body);
       container.appendChild(card);
       return;
     }
-
-    const h3 = document.createElement('h3');
-    const heureSpan = document.createElement('span');
-    heureSpan.textContent = slot.heure || '';
-    heureSpan.style.fontSize = '0.8rem';
-    heureSpan.style.color = 'var(--ink-soft)';
-    heureSpan.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const headerRight = document.createElement('span');
-    headerRight.style.display = 'flex';
-    headerRight.style.alignItems = 'center';
-    headerRight.style.gap = '8px';
-    headerRight.appendChild(buildDoneCheckbox(dateStr, idx));
-    headerRight.appendChild(heureSpan);
-    h3.innerHTML = `<span>${slot.matiere || slot.modalite || '—'}</span>`;
-    h3.appendChild(headerRight);
-    card.appendChild(h3);
-
-    const body = document.createElement('div');
-    body.className = 'subject-body';
 
     const colorName = MODALITE_TO_COLORNAME[slot.modalite];
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
@@ -1304,85 +1379,69 @@ async function renderJournal(dateStr){
       found = getEntryForModality(subjectKey, dateStr, colorName);
     }
     const modDispForColor = MODALITE_DISPLAY[slot.modalite];
-    card.style.setProperty('--card-mod-color', found ? found.css : (modDispForColor ? modDispForColor.css : 'var(--ink)'));
+    const modColor = found ? found.css : (modDispForColor ? modDispForColor.css : null);
+    card.style.setProperty('--card-mod-color', modColor || 'var(--ink)');
     if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
 
-    if (found){
-      const row = document.createElement('div');
-      row.className = 'entry';
+    const row = document.createElement('div');
+    row.className = 'slot-row';
+
+    if (modColor){
       const dot = document.createElement('span');
       dot.className = 'dot';
-      dot.style.background = found.css;
+      dot.style.background = modColor;
+      dot.style.flexShrink = '0';
       row.appendChild(dot);
+    }
 
-      const textWrap = document.createElement('div');
-      textWrap.className = 'entry-text';
-      const titleEl = document.createElement('div');
-      titleEl.className = 'entry-title';
-      titleEl.textContent = found.title + (found.extra ? ` — ${found.extra}` : '');
-      textWrap.appendChild(titleEl);
-      row.appendChild(textWrap);
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'slot-icon';
+    iconSpan.title = slot.matiere || '';
+    iconSpan.textContent = matiereIcon(slot.matiere);
+    row.appendChild(iconSpan);
 
-      const badgeRow = document.createElement('div');
-      badgeRow.className = 'badge-row';
-      if (found.domain){
-        const domBadge = document.createElement('span');
-        domBadge.className = 'badge badge-domain';
-        domBadge.textContent = found.domain;
-        badgeRow.appendChild(domBadge);
-      }
-      if (found.link){
-        const linkBadge = document.createElement('a');
-        linkBadge.className = 'badge badge-link';
-        linkBadge.href = found.link;
-        linkBadge.target = '_blank';
-        linkBadge.textContent = 'lien';
-        badgeRow.appendChild(linkBadge);
-      }
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.style.background = found.css;
-      badge.textContent = found.modality;
-      badgeRow.appendChild(badge);
-      row.appendChild(badgeRow);
+    const titleText = document.createElement('span');
+    titleText.className = 'slot-title';
+    titleText.textContent = found
+      ? found.title + (found.extra ? ` — ${found.extra}` : '')
+      : (slot.matiere || slot.modalite || '—');
+    row.appendChild(titleText);
 
-      body.appendChild(row);
-    } else {
-      // simple display line (Autonomie, Récréation, Cantine, matière sans feuille dédiée, etc.)
-      if (slot.modalite){
-        const modLine = document.createElement('div');
-        modLine.className = 'entry-meta';
-        modLine.style.marginBottom = '6px';
-        const disp = MODALITE_DISPLAY[slot.modalite];
-        if (disp){
-          const dot = document.createElement('span');
-          dot.className = 'dot';
-          dot.style.background = disp.css;
-          dot.style.marginRight = '6px';
-          dot.style.verticalAlign = 'middle';
-          dot.style.display = 'inline-block';
-          modLine.appendChild(dot);
-          const label = document.createElement('span');
-          label.style.color = disp.css;
-          label.style.fontWeight = '600';
-          label.textContent = disp.label;
-          modLine.appendChild(label);
-        } else {
-          modLine.textContent = slot.modalite;
-        }
-        body.appendChild(modLine);
-      }
+    // prêt pour plusieurs liens par titre si besoin un jour (actuellement un seul)
+    const links = found && found.link ? [found.link] : [];
+    links.forEach(url => {
+      const linkIcon = document.createElement('a');
+      linkIcon.className = 'slot-link-icon';
+      linkIcon.href = url;
+      linkIcon.target = '_blank';
+      linkIcon.title = 'Ouvrir le lien';
+      linkIcon.textContent = '🔗';
+      row.appendChild(linkIcon);
+    });
+
+    const spacer = document.createElement('span');
+    spacer.className = 'slot-spacer';
+    row.appendChild(spacer);
+
+    if (!found){
       const savedNote = loadJournalNotes()[journalNoteKey(dateStr, idx)];
       const initialNote = savedNote !== undefined ? savedNote : (slot.competence || '');
       const noteToggle = buildNoteToggle(initialNote, `Notes libres — ${slot.matiere || slot.modalite || ''}`, (val) => {
         saveJournalNote(dateStr, idx, val);
       });
       noteToggle._textarea.dataset.slotIdx = idx;
-      headerRight.appendChild(noteToggle._btn);
-      body.appendChild(noteToggle._textarea);
+      row.appendChild(noteToggle._btn);
+      card.appendChild(noteToggle._textarea);
     }
 
-    card.appendChild(body);
+    row.appendChild(buildDoneCheckbox(dateStr, idx));
+
+    const heureSpan = document.createElement('span');
+    heureSpan.className = 'slot-heure';
+    heureSpan.textContent = slot.heure || '';
+    row.appendChild(heureSpan);
+
+    card.appendChild(row);
     container.appendChild(card);
   });
 }
@@ -1437,17 +1496,17 @@ function copyJournalToClipboard(){
     const found = (colorName && subjectKey) ? getEntryForModality(subjectKey, dateStr, colorName) : null;
     if (found){
       const label = found.title + (found.extra ? ` — ${found.extra}` : '');
-      const titreCell = found.link ? buildHyperlinkFormula(found.link, label) : label;
-      lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', ''].join('\t'));
+      // Colonnes : Date, Heure, Lien 1, Lien 2, Matière, Modalité, Titre, Notes
+      lines.push([dateStr, slot.heure || '', found.link || '', '', slot.matiere, found.modality, label, ''].join('\t'));
     } else {
       const ta = document.querySelector(`textarea[data-slot-idx="${idx}"]`);
       const txt = ta ? ta.value.trim() : '';
-      lines.push([dateStr, slot.heure || '', slot.matiere || '', slot.modalite || '', txt, '', ''].join('\t'));
+      lines.push([dateStr, slot.heure || '', '', '', slot.matiere || '', slot.modalite || '', txt, ''].join('\t'));
     }
   });
   const analyseTxt = document.getElementById('analyseText').value.trim();
   if (analyseTxt){
-    lines.push([dateStr, '', 'Analyse de pratique', '', analyseTxt, '', ''].join('\t'));
+    lines.push([dateStr, '', '', '', 'Analyse de pratique', '', analyseTxt, ''].join('\t'));
   }
   safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Cahier Journal" du Google Sheet');
 }
@@ -1799,16 +1858,40 @@ function renderSuivi(){
   if (domaineFilter) store = store.filter(r => (r.domaine || '(sans domaine)') === domaineFilter);
 
   const obsStore = loadObsStore().filter(o => o.eleve === student).sort((a,b) => b.date.localeCompare(a.date));
+  const comportStore = loadComportStore().filter(r => r.eleve === student).sort((a,b) => b.date.localeCompare(a.date));
 
-  if (store.length === 0 && obsStore.length === 0){
-    const note = document.createElement('div');
-    note.className = 'empty-note';
-    note.textContent = "Rien d'enregistré pour cet élève (avec ces filtres) pour le moment.";
-    container.appendChild(note);
-    return;
-  }
+  const showExtras = !disciplineFilter && !domaineFilter;
 
-  if (obsStore.length > 0 && !disciplineFilter && !domaineFilter){
+  if (showExtras){
+    // ---- Comportement (lecture seule ici ; modifiable dans l'onglet Comportement) ----
+    if (comportStore.length > 0){
+      const comportBlock = document.createElement('div');
+      comportBlock.className = 'discipline-group';
+      const h3c = document.createElement('h3');
+      h3c.textContent = 'Comportement';
+      comportBlock.appendChild(h3c);
+      const innerC = document.createElement('div');
+      innerC.className = 'domaine-block';
+      const starsEarned = comportStore.filter(r => dayStarEarned(r.quarters)).length;
+      const summaryLine = document.createElement('div');
+      summaryLine.className = 'result-line';
+      summaryLine.style.display = 'block';
+      summaryLine.style.fontWeight = '600';
+      summaryLine.textContent = `⭐ ${starsEarned} étoile${starsEarned>1?'s':''} sur ${comportStore.length} jour${comportStore.length>1?'s':''}`;
+      innerC.appendChild(summaryLine);
+      comportStore.slice(0, 10).forEach(r => {
+        const line = document.createElement('div');
+        line.className = 'result-line';
+        line.style.display = 'block';
+        const star = dayStarEarned(r.quarters) ? '⭐' : '☆';
+        line.textContent = `${r.date} — ${star}`;
+        innerC.appendChild(line);
+      });
+      comportBlock.appendChild(innerC);
+      container.appendChild(comportBlock);
+    }
+
+    // ---- Observations (+ ajout direct) ----
     const obsBlock = document.createElement('div');
     obsBlock.className = 'discipline-group';
     const h3 = document.createElement('h3');
@@ -1816,6 +1899,25 @@ function renderSuivi(){
     obsBlock.appendChild(h3);
     const inner = document.createElement('div');
     inner.className = 'domaine-block';
+
+    const addWrap = document.createElement('div');
+    addWrap.style.marginBottom = '10px';
+    const addTa = document.createElement('textarea');
+    addTa.className = 'free';
+    addTa.placeholder = `Nouvelle observation — ${student}`;
+    const addBtn = document.createElement('button');
+    addBtn.textContent = 'Ajouter';
+    addBtn.style.cssText = 'font-family:-apple-system,sans-serif;font-size:0.78rem;border:1px solid var(--ink);background:white;color:var(--ink);padding:5px 12px;border-radius:7px;cursor:pointer;margin-top:6px;';
+    addBtn.addEventListener('click', () => {
+      const txt = addTa.value.trim();
+      if (!txt) return;
+      addObservation(student, txt);
+      renderSuivi();
+    });
+    addWrap.appendChild(addTa);
+    addWrap.appendChild(addBtn);
+    inner.appendChild(addWrap);
+
     obsStore.forEach(o => {
       const line = document.createElement('div');
       line.className = 'result-line';
@@ -1827,6 +1929,13 @@ function renderSuivi(){
     container.appendChild(obsBlock);
   }
 
+  if (store.length === 0 && !showExtras){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Rien d'enregistré pour cet élève (avec ces filtres) pour le moment.";
+    container.appendChild(note);
+    return;
+  }
   if (store.length === 0) return;
 
   // group by discipline, then domaine
@@ -2492,7 +2601,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       syncEvalFromSheet().then(() => renderEvaluations(document.getElementById('evalDate').value));
     }
     if (btn.dataset.tab === 'suivi'){
-      syncEvalFromSheet().then(renderSuivi);
+      Promise.all([syncEvalFromSheet(), syncComportFromSheet(), syncObsFromSheet()]).then(renderSuivi);
       renderSuivi();
     }
     if (btn.dataset.tab === 'observations'){
@@ -2709,18 +2818,24 @@ function renderComportEleve(){
     dateEl.textContent = r.date;
     row.appendChild(dateEl);
 
-    r.quarters.forEach((val, qi) => {
+    const quarters = r.quarters.slice();
+    quarters.forEach((val, qi) => {
       const dot = document.createElement('span');
-      dot.className = 'comport-legend-dot';
+      dot.className = 'comport-legend-dot comport-legend-dot-editable';
       const state = RAPPEL_STATES[val] || RAPPEL_STATES[0];
       dot.style.background = state.bg;
       dot.style.borderColor = state.border;
       dot.title = `${COMPORT_QUARTERS[qi]} — ${RAPPEL_TITLES[val]}`;
+      dot.addEventListener('click', () => {
+        quarters[qi] = (quarters[qi] + 1) % RAPPEL_STATES.length;
+        upsertComportRecord({ date: r.date, eleve: student, quarters });
+        renderComportEleve();
+      });
       row.appendChild(dot);
     });
 
     const star = document.createElement('span');
-    star.textContent = dayStarEarned(r.quarters) ? '⭐' : '☆';
+    star.textContent = dayStarEarned(quarters) ? '⭐' : '☆';
     row.appendChild(star);
 
     container.appendChild(row);
