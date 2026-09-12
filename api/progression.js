@@ -85,8 +85,11 @@ async function extractSheet(sheets, spreadsheetId, sheetName){
       if (!cell) return;
       const hex = rgbToHex(cell.userEnteredFormat && cell.userEnteredFormat.backgroundColor);
       const val = cell.formattedValue;
-      if (hex || (val !== undefined && val !== null && val !== '')){
-        cells[idx + 1] = { v: val || '', c: hex }; // clé = colonne 1-indexée, comme le reste de l'app
+      const cellLink = cell.hyperlink || null;
+      if (hex || (val !== undefined && val !== null && val !== '') || cellLink){
+        const entry = { v: val || '', c: hex };
+        if (cellLink) entry.l = cellLink;
+        cells[idx + 1] = entry; // clé = colonne 1-indexée, comme le reste de l'app
       }
     });
     if (Object.keys(cells).length > 0){
