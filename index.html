@@ -375,6 +375,10 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.92rem;
   }
+  .eval-all-row{
+    background: #FFF3DE;
+    border-bottom: 1px solid var(--gold);
+  }
   .student-row:last-child{ border-bottom:none; }
   .score-controls{
     display:flex;
@@ -824,7 +828,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-12 03h57 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-12 06h17 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1700,6 +1704,26 @@ function renderEvaluations(dateStr){
         card.appendChild(meta);
       }
 
+      // Ligne "Tous" : applique le même +1/-1 à toute la classe d'un coup
+      const allRow = document.createElement('div');
+      allRow.className = 'student-row eval-all-row';
+      const allLabel = document.createElement('span');
+      allLabel.textContent = 'Tous les élèves';
+      allLabel.style.fontWeight = '600';
+      allRow.appendChild(allLabel);
+      const allControls = document.createElement('div');
+      allControls.className = 'score-controls';
+      const allMinus = document.createElement('button');
+      allMinus.className = 'score-btn';
+      allMinus.textContent = '−';
+      const allPlus = document.createElement('button');
+      allPlus.className = 'score-btn';
+      allPlus.textContent = '+';
+      allControls.appendChild(allMinus);
+      allControls.appendChild(allPlus);
+      allRow.appendChild(allControls);
+      card.appendChild(allRow);
+
       STUDENTS.forEach(name => {
         const row = document.createElement('div');
         row.className = 'student-row';
@@ -1751,6 +1775,25 @@ function renderEvaluations(dateStr){
         row.appendChild(controls);
         card.appendChild(row);
       });
+
+      // Applique le +1/-1 du bouton "Tous" à chaque élève de la carte
+      function commitAll(delta){
+        card.querySelectorAll('.score-value').forEach(valueSpan => {
+          const newScore = Math.max(0, parseInt(valueSpan.dataset.score, 10) + delta);
+          valueSpan.textContent = String(newScore);
+          valueSpan.dataset.score = String(newScore);
+          upsertEvalRecord({
+            date: dateStr,
+            discipline: subjectKey,
+            domaine: found.domain || '',
+            titre: displayTitle,
+            eleve: valueSpan.dataset.student,
+            score: String(newScore)
+          });
+        });
+      }
+      allMinus.addEventListener('click', () => commitAll(-1));
+      allPlus.addEventListener('click', () => commitAll(1));
 
       container.appendChild(card);
     });
