@@ -49,7 +49,7 @@
     position: fixed;
     left: 0; right: 0; bottom: 0;
     display:grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(9, 1fr);
     gap: 0;
     padding: 6px 2px calc(6px + env(safe-area-inset-bottom, 0px));
     background: var(--paper);
@@ -828,7 +828,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-12 06h17 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-12 20h44 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -863,6 +863,10 @@
   <button class="tab-btn" data-tab="comportement">
     <svg viewBox="0 0 24 24"><path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4-3.9-3.8 5.4-.8L12 3.5z"/></svg>
     <span>Comport.</span>
+  </button>
+  <button class="tab-btn" data-tab="lecons">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="5.5"/><path d="M9.5 20h5M10 22h4"/></svg>
+    <span>Leçons</span>
   </button>
 </nav>
 
@@ -1006,6 +1010,16 @@
     </div>
   </section>
 
+  <!-- LEÇONS DE LA SEMAINE (modalité Leçon = bleu) -->
+  <section id="lecons" class="panel">
+    <div class="datebar">
+      <button class="navbtn" id="prevWeekLecons">←</button>
+      <span id="leconsWeekLabel" style="font-family:-apple-system,sans-serif; font-size:0.9rem; color:var(--ink-soft); flex:1; text-align:center;"></span>
+      <button class="navbtn" id="nextWeekLecons">→</button>
+    </div>
+    <div id="leconsContent"></div>
+  </section>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -1077,6 +1091,19 @@ function findActiveColumn(sheet, targetDateStr){
 }
 
 // Return list of {title, domain, link, extra, modality, css} active for a subject on a given date
+// Lien à utiliser pour une case : son propre lien s'il existe, sinon (pour
+// Entraînement/Évaluation) le lien de la case Modelage de la même ligne, sinon le
+// lien historique posé sur le titre (colonne A).
+function resolveCellLink(row, cell, modalityName){
+  if (cell.l) return cell.l;
+  if (modalityName === 'Entraînement' || modalityName === 'Évaluation'){
+    for (const c of Object.values(row.cells)){
+      if (c.c === 'FFF5DEB3' && c.l) return c.l; // beige = Modelage
+    }
+  }
+  return row.link || null;
+}
+
 function getActiveEntries(subjectName, targetDateStr){
   const sheet = SUBJECT_DATA[subjectName];
   if (!sheet) return [];
@@ -1086,13 +1113,14 @@ function getActiveEntries(subjectName, targetDateStr){
   for (const row of sheet.rows){
     const cell = row.cells[col];
     if (cell && cell.c && COLOR_MAP[cell.c]){
+      const modality = COLOR_MAP[cell.c].name;
       out.push({
         title: row.title,
         domain: row.domain,
-        link: row.link,
+        link: resolveCellLink(row, cell, modality),
         extra: row.extra,
         rawValue: cell.v,
-        modality: COLOR_MAP[cell.c].name,
+        modality: modality,
         css: COLOR_MAP[cell.c].css
       });
     }
@@ -1149,6 +1177,14 @@ function weekdayNameFr(dateStr){
 function getEntryForModality(subjectKey, dateStr, modalityName){
   const entries = getActiveEntries(subjectKey, dateStr);
   return entries.find(e => e.modality === modalityName) || null;
+}
+
+// Renvoie TOUTES les correspondances (pas juste la première) : utile pour
+// Entraînement/Évaluation où plusieurs cases de la même couleur peuvent être actives
+// le même jour (plusieurs compétences travaillées en parallèle).
+function getAllEntriesForModality(subjectKey, dateStr, modalityName){
+  const entries = getActiveEntries(subjectKey, dateStr);
+  return entries.filter(e => e.modality === modalityName);
 }
 
 // ---------- Emploi du temps modifiable (surcharge locale) ----------
@@ -1385,56 +1421,38 @@ async function renderJournal(dateStr){
     const colorName = MODALITE_TO_COLORNAME[slot.modalite];
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
 
-    let found = null;
+    let matches = [];
     if (colorName && subjectKey){
-      found = getEntryForModality(subjectKey, dateStr, colorName);
+      matches = getAllEntriesForModality(subjectKey, dateStr, colorName);
     }
     const modDispForColor = MODALITE_DISPLAY[slot.modalite];
-    const modColor = found ? found.css : (modDispForColor ? modDispForColor.css : null);
-    card.style.setProperty('--card-mod-color', modColor || 'var(--ink)');
-    if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
 
-    const row = document.createElement('div');
-    row.className = 'slot-row';
+    if (matches.length === 0){
+      // rien trouvé : une seule carte "vide" avec note libre, comme avant
+      card.style.setProperty('--card-mod-color', modDispForColor ? modDispForColor.css : 'var(--ink)');
+      if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
 
-    if (modColor){
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      dot.style.background = modColor;
-      dot.style.flexShrink = '0';
-      row.appendChild(dot);
-    }
-
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'slot-icon';
-    iconSpan.title = slot.matiere || '';
-    iconSpan.textContent = matiereIcon(slot.matiere);
-    row.appendChild(iconSpan);
-
-    const titleText = document.createElement('span');
-    titleText.className = 'slot-title';
-    titleText.textContent = found
-      ? found.title + (found.extra ? ` — ${found.extra}` : '') + evalNumberSuffix(found.rawValue)
-      : (slot.matiere || slot.modalite || '—');
-    row.appendChild(titleText);
-
-    // prêt pour plusieurs liens par titre si besoin un jour (actuellement un seul)
-    const links = found && found.link ? [found.link] : [];
-    links.forEach(url => {
-      const linkIcon = document.createElement('a');
-      linkIcon.className = 'slot-link-icon';
-      linkIcon.href = url;
-      linkIcon.target = '_blank';
-      linkIcon.title = 'Ouvrir le lien';
-      linkIcon.textContent = '🔗';
-      row.appendChild(linkIcon);
-    });
-
-    const spacer = document.createElement('span');
-    spacer.className = 'slot-spacer';
-    row.appendChild(spacer);
-
-    if (!found){
+      const row = document.createElement('div');
+      row.className = 'slot-row';
+      if (modDispForColor){
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        dot.style.background = modDispForColor.css;
+        dot.style.flexShrink = '0';
+        row.appendChild(dot);
+      }
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'slot-icon';
+      iconSpan.title = slot.matiere || '';
+      iconSpan.textContent = matiereIcon(slot.matiere);
+      row.appendChild(iconSpan);
+      const titleText = document.createElement('span');
+      titleText.className = 'slot-title';
+      titleText.textContent = slot.matiere || slot.modalite || '—';
+      row.appendChild(titleText);
+      const spacer = document.createElement('span');
+      spacer.className = 'slot-spacer';
+      row.appendChild(spacer);
       const savedNote = loadJournalNotes()[journalNoteKey(dateStr, idx)];
       const initialNote = savedNote !== undefined ? savedNote : (slot.competence || '');
       const noteToggle = buildNoteToggle(initialNote, `Notes libres — ${slot.matiere || slot.modalite || ''}`, (val) => {
@@ -1443,17 +1461,70 @@ async function renderJournal(dateStr){
       noteToggle._textarea.dataset.slotIdx = idx;
       row.appendChild(noteToggle._btn);
       card.appendChild(noteToggle._textarea);
+      row.appendChild(buildDoneCheckbox(dateStr, idx));
+      const heureSpan = document.createElement('span');
+      heureSpan.className = 'slot-heure';
+      heureSpan.textContent = slot.heure || '';
+      row.appendChild(heureSpan);
+      card.appendChild(row);
+      container.appendChild(card);
+      return;
     }
 
-    row.appendChild(buildDoneCheckbox(dateStr, idx));
+    // une ou plusieurs correspondances (plusieurs cases de la même couleur le même jour,
+    // fréquent pour Entraînement/Évaluation) : une carte par correspondance
+    matches.forEach((found, matchIdx) => {
+      const subCard = matchIdx === 0 ? card : document.createElement('div');
+      if (matchIdx > 0) subCard.className = 'subject-card slot-line';
+      const rowKey = matches.length > 1 ? `${idx}_${matchIdx}` : idx;
 
-    const heureSpan = document.createElement('span');
-    heureSpan.className = 'slot-heure';
-    heureSpan.textContent = slot.heure || '';
-    row.appendChild(heureSpan);
+      subCard.style.setProperty('--card-mod-color', found.css);
+      if (loadJournalDone()[journalNoteKey(dateStr, rowKey)]) subCard.classList.add('card-done');
 
-    card.appendChild(row);
-    container.appendChild(card);
+      const row = document.createElement('div');
+      row.className = 'slot-row';
+
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = found.css;
+      dot.style.flexShrink = '0';
+      row.appendChild(dot);
+
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'slot-icon';
+      iconSpan.title = slot.matiere || '';
+      iconSpan.textContent = matiereIcon(slot.matiere);
+      row.appendChild(iconSpan);
+
+      const titleText = document.createElement('span');
+      titleText.className = 'slot-title';
+      titleText.textContent = found.title + (found.extra ? ` — ${found.extra}` : '') + evalNumberSuffix(found.rawValue);
+      row.appendChild(titleText);
+
+      if (found.link){
+        const linkIcon = document.createElement('a');
+        linkIcon.className = 'slot-link-icon';
+        linkIcon.href = found.link;
+        linkIcon.target = '_blank';
+        linkIcon.title = 'Ouvrir le lien';
+        linkIcon.textContent = '🔗';
+        row.appendChild(linkIcon);
+      }
+
+      const spacer = document.createElement('span');
+      spacer.className = 'slot-spacer';
+      row.appendChild(spacer);
+
+      row.appendChild(buildDoneCheckbox(dateStr, rowKey));
+
+      const heureSpan = document.createElement('span');
+      heureSpan.className = 'slot-heure';
+      heureSpan.textContent = matchIdx === 0 ? (slot.heure || '') : '';
+      row.appendChild(heureSpan);
+
+      subCard.appendChild(row);
+      container.appendChild(subCard);
+    });
   });
 }
 
@@ -1504,12 +1575,14 @@ function copyJournalToClipboard(){
   slots.forEach((slot, idx) => {
     const colorName = MODALITE_TO_COLORNAME[slot.modalite];
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
-    const found = (colorName && subjectKey) ? getEntryForModality(subjectKey, dateStr, colorName) : null;
-    if (found){
-      const label = found.title + (found.extra ? ` — ${found.extra}` : '') + evalNumberSuffix(found.rawValue);
-      const titreCell = found.link ? buildHyperlinkFormula(found.link, label) : label;
-      // Colonnes : Date, Heure, Matière, Modalité, Titre (lien cliquable si dispo), Lien, Notes
-      lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', ''].join('\t'));
+    const matches = (colorName && subjectKey) ? getAllEntriesForModality(subjectKey, dateStr, colorName) : [];
+    if (matches.length > 0){
+      matches.forEach(found => {
+        const label = found.title + (found.extra ? ` — ${found.extra}` : '') + evalNumberSuffix(found.rawValue);
+        const titreCell = found.link ? buildHyperlinkFormula(found.link, label) : label;
+        // Colonnes : Date, Heure, Matière, Modalité, Titre (lien cliquable si dispo), Lien, Notes
+        lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', ''].join('\t'));
+      });
     } else {
       const ta = document.querySelector(`textarea[data-slot-idx="${idx}"]`);
       const txt = ta ? ta.value.trim() : '';
@@ -1613,7 +1686,8 @@ function upsertEvalRecord(rec){
   if (idx >= 0) store[idx] = rec; else store.push(rec);
   saveEvalStore(store);
   // colonnes du Sheet : Date, Discipline, Domaine, Titre évaluation, Élève, Validation (+1/0)
-  sheetSaveRow(
+  debouncedSheetSaveRow(
+    `Évaluation|${rec.date}|${rec.discipline}|${rec.titre}|${rec.eleve}`,
     'Évaluation',
     [rec.date, rec.discipline, rec.domaine || '', rec.titre, rec.eleve, rec.score],
     [0, 1, 3, 4] // upsert sur Date + Discipline + Titre + Élève
@@ -1648,6 +1722,98 @@ const EVAL_SUBJECTS = ["Graphie", "Lecture", "Maths", "Problèmes", "Calcul ment
 
 // Les évaluations sont ancrées à la date EXACTE de la case orange dans la feuille source
 // (contrairement au cahier journal, on ne reporte pas depuis la date précédente).
+// ---------- Leçons de la semaine (modalité Leçon = bleu, sur toutes les matières) ----------
+const LECON_WEEKDAYS = ['lundi', 'mardi', 'jeudi', 'vendredi'];
+const LECON_COLOR_HEX = 'FF4682B4';
+
+function getExactColoredEntries(subjectKey, targetDateStr, colorHex){
+  const sheet = SUBJECT_DATA[subjectKey];
+  if (!sheet) return [];
+  const col = findExactColumn(sheet, targetDateStr);
+  if (!col) return [];
+  const out = [];
+  for (const row of sheet.rows){
+    const cell = row.cells[col];
+    if (cell && cell.c === colorHex){
+      out.push({ title: row.title, domain: row.domain, link: row.link, extra: row.extra, rawValue: cell.v });
+    }
+  }
+  return out;
+}
+
+function renderLecons(mondayStr){
+  const fridayStr = addDays(mondayStr, 4);
+  const labelEl = document.getElementById('leconsWeekLabel');
+  labelEl.textContent = `Semaine du ${dayLabelFr(mondayStr)} au ${dayLabelFr(fridayStr)}`;
+  labelEl.dataset.monday = mondayStr;
+  const container = document.getElementById('leconsContent');
+  container.innerHTML = '';
+
+  let anyFound = false;
+
+  LECON_WEEKDAYS.forEach((wd, i) => {
+    const dateStr = addDays(mondayStr, [0,1,3,4][i]);
+    const dayEntries = [];
+    Object.keys(SUBJECT_DATA).forEach(subjectKey => {
+      getExactColoredEntries(subjectKey, dateStr, LECON_COLOR_HEX).forEach(entry => {
+        dayEntries.push({ subjectKey, entry });
+      });
+    });
+    if (dayEntries.length === 0) return;
+    anyFound = true;
+
+    const block = document.createElement('div');
+    block.className = 'apc-domain';
+    const h3 = document.createElement('h3');
+    h3.textContent = dayLabelFr(dateStr);
+    block.appendChild(h3);
+
+    dayEntries.forEach(({ subjectKey, entry }) => {
+      const row = document.createElement('div');
+      row.className = 'slot-row';
+      row.style.padding = '9px 16px';
+      row.style.borderBottom = '1px dashed var(--line)';
+
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'slot-icon';
+      iconSpan.textContent = matiereIcon(subjectKey);
+      row.appendChild(iconSpan);
+
+      const titleText = document.createElement('span');
+      titleText.className = 'slot-title';
+      titleText.textContent = `${subjectKey} — ${entry.title}${entry.extra ? ' — ' + entry.extra : ''}${evalNumberSuffix(entry.rawValue)}`;
+      row.appendChild(titleText);
+
+      if (entry.link){
+        const linkIcon = document.createElement('a');
+        linkIcon.className = 'slot-link-icon';
+        linkIcon.href = entry.link;
+        linkIcon.target = '_blank';
+        linkIcon.textContent = '🔗';
+        row.appendChild(linkIcon);
+      }
+
+      block.appendChild(row);
+    });
+
+    container.appendChild(block);
+  });
+
+  if (!anyFound){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Aucune nouvelle leçon détectée pour cette semaine.";
+    container.appendChild(note);
+  }
+}
+
+function shiftLeconsWeek(delta){
+  const cur = document.getElementById('leconsWeekLabel').dataset.monday;
+  const next = addDays(cur, delta * 7);
+  document.getElementById('leconsWeekLabel').dataset.monday = next;
+  renderLecons(next);
+}
+
 function findExactColumn(sheet, targetDateStr){
   for (const [col, dstr] of Object.entries(sheet.date_cols)){
     if (dstr === targetDateStr) return col;
@@ -2687,6 +2853,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       });
       renderComportJour(document.getElementById('comportDate').value);
     }
+    if (btn.dataset.tab === 'lecons'){
+      refreshProgressionData().then(ok => { if (ok) renderLecons(document.getElementById('leconsWeekLabel').dataset.monday); });
+    }
   });
 });
 
@@ -2720,15 +2889,29 @@ function getComportRecord(dateStr, eleve){
   const store = loadComportStore();
   return store.find(r => r.date === dateStr && r.eleve === eleve) || { date: dateStr, eleve, quarters: [0,0,0,0] };
 }
+// Évite les doublons quand on tape vite plusieurs fois de suite : au lieu d'envoyer
+// une requête à chaque clic, on attend un court instant et on n'envoie que le dernier
+// état pour une même clé (ex. même élève + même jour).
+const pendingSaves = {};
+function debouncedSheetSaveRow(key, tab, row, matchColumns, delay){
+  if (pendingSaves[key]) clearTimeout(pendingSaves[key]);
+  pendingSaves[key] = setTimeout(() => {
+    delete pendingSaves[key];
+    sheetSaveRow(tab, row, matchColumns);
+  }, delay || 500);
+}
+
 function upsertComportRecord(rec){
   const store = loadComportStore();
   const idx = store.findIndex(r => r.date === rec.date && r.eleve === rec.eleve);
   if (idx >= 0) store[idx] = rec; else store.push(rec);
   saveComportStore(store);
-  // colonnes du Sheet : Date, Élève, Q1 (8h30), Q2 (10h05), Q3 (13h30), Q4 (15h)
-  sheetSaveRow(
+  // colonnes du Sheet : Date, Élève, Q1 (8h30), Q2 (10h05), Q3 (13h30), Q4 (15h), Etoile gagnée
+  const starEarned = dayStarEarned(rec.quarters) ? 1 : 0;
+  debouncedSheetSaveRow(
+    `Comportement|${rec.date}|${rec.eleve}`,
     'Comportement',
-    [rec.date, rec.eleve, rec.quarters[0], rec.quarters[1], rec.quarters[2], rec.quarters[3]],
+    [rec.date, rec.eleve, rec.quarters[0], rec.quarters[1], rec.quarters[2], rec.quarters[3], starEarned],
     [0, 1] // upsert sur Date + Élève
   );
 }
@@ -2756,6 +2939,14 @@ async function syncComportFromSheet(){
   if (changed) saveComportStore(Array.from(known.values()));
 }
 
+function getMondayOfWeek(dateStr){
+  const d = parseDate(dateStr);
+  const day = d.getDay(); // 0=dimanche
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  return fmtDate(d);
+}
+
 function dayStarEarned(quarters){
   return quarters.every(c => (c || 0) < 2);
 }
@@ -2771,7 +2962,7 @@ async function ensureAllStudentsForDate(dateStr){
   const missing = STUDENTS.filter(s => !existing.has(s));
   if (missing.length === 0) return;
   await Promise.all(missing.map(name =>
-    sheetSaveRow('Comportement', [dateStr, name, 0, 0, 0, 0], [0, 1])
+    sheetSaveRow('Comportement', [dateStr, name, 0, 0, 0, 0, 1], [0, 1])
   ));
   const store2 = loadComportStore();
   missing.forEach(name => store2.push({ date: dateStr, eleve: name, quarters: [0,0,0,0] }));
@@ -2896,6 +3087,50 @@ function renderComportEleve(){
   summary.textContent = `⭐ ${starsEarned} étoile${starsEarned>1?'s':''} sur ${store.length} jour${store.length>1?'s':''} de classe`;
   container.appendChild(summary);
 
+  // ---- Bilan par semaine (moyenne par quart de journée + étoiles gagnées) ----
+  const byWeek = {};
+  store.forEach(r => {
+    const monday = getMondayOfWeek(r.date);
+    byWeek[monday] = byWeek[monday] || [];
+    byWeek[monday].push(r);
+  });
+  const weekKeys = Object.keys(byWeek).sort((a,b) => b.localeCompare(a));
+  if (weekKeys.length > 0){
+    const weekBlock = document.createElement('div');
+    weekBlock.className = 'comport-summary';
+    weekBlock.style.fontWeight = 'normal';
+    const title = document.createElement('div');
+    title.style.fontWeight = '600';
+    title.style.marginBottom = '8px';
+    title.textContent = 'Bilan par semaine';
+    weekBlock.appendChild(title);
+
+    weekKeys.forEach(monday => {
+      const days = byWeek[monday];
+      const avg = [0,1,2,3].map(qi => {
+        const sum = days.reduce((s,d) => s + (d.quarters[qi] || 0), 0);
+        return (sum / days.length).toFixed(1);
+      });
+      const weekStars = days.filter(d => dayStarEarned(d.quarters)).length;
+      const line = document.createElement('div');
+      line.className = 'comport-history-row';
+      line.style.fontSize = '0.8rem';
+      const label = document.createElement('span');
+      label.style.flex = '1';
+      label.textContent = `Semaine du ${monday}`;
+      line.appendChild(label);
+      const avgSpan = document.createElement('span');
+      avgSpan.style.color = 'var(--ink-soft)';
+      avgSpan.textContent = `Q1:${avg[0]} Q2:${avg[1]} Q3:${avg[2]} Q4:${avg[3]}`;
+      line.appendChild(avgSpan);
+      const starsSpan = document.createElement('span');
+      starsSpan.textContent = `⭐ ${weekStars}/${days.length}`;
+      line.appendChild(starsSpan);
+      weekBlock.appendChild(line);
+    });
+    container.appendChild(weekBlock);
+  }
+
   store.forEach(r => {
     const row = document.createElement('div');
     row.className = 'comport-history-row';
@@ -3009,6 +3244,9 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('resetEdt').addEventListener('click', resetEdtDay);
 
   renderComportJour(defaultDate);
+  document.getElementById('leconsWeekLabel').dataset.monday = getMondayOfWeek(defaultDate);
+  document.getElementById('prevWeekLecons').addEventListener('click', () => shiftLeconsWeek(-1));
+  document.getElementById('nextWeekLecons').addEventListener('click', () => shiftLeconsWeek(1));
   document.getElementById('comportDate').addEventListener('change', e => { renderComportJour(e.target.value); ensureAllStudentsForDate(e.target.value); });
   document.getElementById('prevDayComport').addEventListener('click', ()=>shiftComportDay(-1));
   document.getElementById('nextDayComport').addEventListener('click', ()=>shiftComportDay(1));
