@@ -46,7 +46,24 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST'){
-      const { tab, row, matchColumns } = req.body || {};
+      const { tab, row, rows, matchColumns } = req.body || {};
+
+      // Mode lot : plusieurs lignes à ajouter d'un coup, sans lecture préalable
+      // (utilisé quand on sait déjà côté app qu'elles sont absentes — évite de multiplier
+      // les requêtes de lecture/écriture et de dépasser le quota Google Sheets).
+      if (tab && Array.isArray(rows)){
+        if (rows.length === 0){ res.status(200).json({ ok: true, appended: 0 }); return; }
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: sheetId,
+          range: `${tab}!A:Z`,
+          valueInputOption: 'USER_ENTERED',
+          insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: rows }
+        });
+        res.status(200).json({ ok: true, appended: rows.length });
+        return;
+      }
+
       if (!tab || !Array.isArray(row)){
         res.status(400).json({ error: "Corps attendu : { tab: string, row: string[] }" });
         return;
@@ -93,4 +110,3 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: 'Erreur Google Sheets : ' + e.message + ' — SHEET_ID utilisé : ' + sheetIdPreview(sheetId) });
   }
 };
-    
