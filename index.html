@@ -831,7 +831,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-13 18h48 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-13 19h12 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -2959,6 +2959,27 @@ function dayStarEarned(quarters){
 // Garantit qu'un jour donné a bien une ligne dans le Sheet pour les 27 élèves (0 par
 // défaut pour ceux jamais touchés), pas seulement ceux sur qui on a tapé.
 const comportCompletedDates = new Set();
+async function sheetSaveRows(tab, rows){
+  if (rows.length === 0) return true;
+  try{
+    const resp = await fetch(SHEET_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tab, rows })
+    });
+    if (!resp.ok){
+      let msg = resp.status;
+      try{ const j = await resp.json(); if (j.error) msg = j.error; }catch(e2){}
+      showToast('⚠️ Sheet non mis à jour : ' + msg);
+      return false;
+    }
+    return true;
+  }catch(e){
+    showToast('⚠️ Sheet injoignable (hors-ligne ?) : ' + e.message);
+    return false;
+  }
+}
+
 async function ensureAllStudentsForDate(dateStr){
   if (comportCompletedDates.has(dateStr)) return;
   comportCompletedDates.add(dateStr);
@@ -2966,9 +2987,9 @@ async function ensureAllStudentsForDate(dateStr){
   const existing = new Set(store.filter(r => r.date === dateStr).map(r => r.eleve));
   const missing = STUDENTS.filter(s => !existing.has(s));
   if (missing.length === 0) return;
-  await Promise.all(missing.map(name =>
-    sheetSaveRow('Comportement', [dateStr, name, 0, 0, 0, 0, 1], [0, 1])
-  ));
+  // un seul envoi groupé (au lieu d'une lecture+écriture par élève) pour ne pas
+  // dépasser le quota de requêtes Google Sheets
+  await sheetSaveRows('Comportement', missing.map(name => [dateStr, name, 0, 0, 0, 0, 1]));
   const store2 = loadComportStore();
   missing.forEach(name => store2.push({ date: dateStr, eleve: name, quarters: [0,0,0,0] }));
   saveComportStore(store2);
