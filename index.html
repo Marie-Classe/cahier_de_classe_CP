@@ -243,6 +243,9 @@
     font-size: 0.95rem;
     flex-shrink:0;
   }
+  .slot-row-divider{
+    border-bottom: 1px dashed var(--line);
+  }
   .slot-spacer{ flex: 1 1 auto; min-width: 6px; }
   .slot-heure{
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -828,7 +831,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-12 20h44 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-13 18h48 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1472,17 +1475,19 @@ async function renderJournal(dateStr){
     }
 
     // une ou plusieurs correspondances (plusieurs cases de la même couleur le même jour,
-    // fréquent pour Entraînement/Évaluation) : une carte par correspondance
-    matches.forEach((found, matchIdx) => {
-      const subCard = matchIdx === 0 ? card : document.createElement('div');
-      if (matchIdx > 0) subCard.className = 'subject-card slot-line';
-      const rowKey = matches.length > 1 ? `${idx}_${matchIdx}` : idx;
+    // fréquent pour Entraînement/Évaluation) : toutes regroupées dans UNE seule carte,
+    // une ligne par correspondance (chacune avec son propre lien et sa propre case "fait")
+    card.style.setProperty('--card-mod-color', matches[0].css);
+    if (matches.every((f, i) => loadJournalDone()[journalNoteKey(dateStr, matches.length > 1 ? `${idx}_${i}` : idx)])){
+      card.classList.add('card-done');
+    }
 
-      subCard.style.setProperty('--card-mod-color', found.css);
-      if (loadJournalDone()[journalNoteKey(dateStr, rowKey)]) subCard.classList.add('card-done');
+    matches.forEach((found, matchIdx) => {
+      const rowKey = matches.length > 1 ? `${idx}_${matchIdx}` : idx;
 
       const row = document.createElement('div');
       row.className = 'slot-row';
+      if (matchIdx < matches.length - 1) row.classList.add('slot-row-divider');
 
       const dot = document.createElement('span');
       dot.className = 'dot';
@@ -1522,9 +1527,9 @@ async function renderJournal(dateStr){
       heureSpan.textContent = matchIdx === 0 ? (slot.heure || '') : '';
       row.appendChild(heureSpan);
 
-      subCard.appendChild(row);
-      container.appendChild(subCard);
+      card.appendChild(row);
     });
+    container.appendChild(card);
   });
 }
 
