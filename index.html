@@ -49,7 +49,7 @@
     position: fixed;
     left: 0; right: 0; bottom: 0;
     display:grid;
-    grid-template-columns: repeat(9, 1fr);
+    grid-template-columns: repeat(10, 1fr);
     gap: 0;
     padding: 6px 2px calc(6px + env(safe-area-inset-bottom, 0px));
     background: var(--paper);
@@ -242,6 +242,93 @@
     text-decoration:none;
     font-size: 0.95rem;
     flex-shrink:0;
+  }
+  .mission-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px dashed var(--line);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.88rem;
+  }
+  .mission-row:last-child{ border-bottom: none; }
+  .mission-row.mission-acquise{ background: #FFF9EC; }
+  .mission-label{ flex: 1; }
+  .mission-validations{ display:flex; gap: 5px; flex-shrink: 0; }
+  .mission-chip{
+    border: 1px solid var(--line);
+    background: white;
+    border-radius: 20px;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .mission-chip-done{
+    background: var(--gold);
+    color: white;
+    border-color: var(--gold);
+  }
+  .skill-picker-cat{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin: 10px 0 4px;
+  }
+  .skill-picker-item{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    padding: 5px 4px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+  }
+  .skill-picker-item input{ flex-shrink: 0; width:16px; height:16px; }
+  .missions-table{
+    border-collapse: collapse;
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.8rem;
+  }
+  .missions-table th, .missions-table td{
+    border: 1px solid var(--line);
+    padding: 6px 8px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .missions-table th{
+    background: var(--paper);
+    font-weight: 600;
+    max-width: 140px;
+    white-space: normal;
+    font-size: 0.72rem;
+  }
+  .missions-table td:first-child, .missions-table th:first-child{
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: white;
+    z-index: 1;
+  }
+  .missions-table tr.mission-cell-acquise td{ background: #FFF9EC; }
+  .missions-cell-chips{ display:flex; gap:3px; justify-content:center; }
+  .missions-mini-chip{
+    width: 20px; height: 20px;
+    border: 1px solid var(--line);
+    background: white;
+    border-radius: 4px;
+    font-size: 0.62rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  .missions-mini-chip.done{
+    background: var(--gold);
+    color: white;
+    border-color: var(--gold);
   }
   .slot-row-divider{
     border-bottom: 1px dashed var(--line);
@@ -831,7 +918,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-14 16h47 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-14 19h29 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -870,6 +957,10 @@
   <button class="tab-btn" data-tab="evaluations">
     <svg viewBox="0 0 24 24"><path d="M6 3.5h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1z"/><path d="M15 3.5v4h4"/><path d="M8.5 13.5l2 2 4-4.5"/></svg>
     <span>Évals</span>
+  </button>
+  <button class="tab-btn" data-tab="missions">
+    <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4.3 4.3 0 0 1 7-3.3A4.3 4.3 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M9 10.5l2 2 4-4.5"/></svg>
+    <span>Missions</span>
   </button>
 </nav>
 
@@ -1011,6 +1102,13 @@
       </div>
       <div id="comportEleveContent"></div>
     </div>
+  </section>
+
+  <!-- MISSIONS (savoir-être / savoir-faire, validation par paliers) -->
+  <section id="missions" class="panel">
+    <p class="empty-note" style="margin-bottom:10px;">Choisis une ou plusieurs compétences à évaluer (Ctrl/Cmd+clic ou glisser pour en choisir plusieurs). Tape sur une puce dans le tableau pour la faire avancer (0 → 1 → 2 → 3). "Acquis" dès que les 3 validations atteignent 3.</p>
+    <select id="missionsSkillSelect" multiple size="6" style="width:100%; margin-bottom:14px; font-family:-apple-system,sans-serif; font-size:0.85rem; padding:6px; border-radius:8px; border:1px solid var(--line);"></select>
+    <div id="missionsContent" style="overflow-x:auto;"></div>
   </section>
 
   <!-- LEÇONS DE LA SEMAINE (modalité Leçon = bleu) -->
@@ -1840,6 +1938,201 @@ function getEvaluationsForDate(subjectKey, targetDateStr){
   return out;
 }
 
+// ---------- Missions (savoir-être / savoir-faire, validation par paliers) ----------
+const MISSIONS_SKILLS = [
+  { cat: "Les savoir-être 🌱", label: "🚀 S'engager dans le travail." },
+  { cat: "Les savoir-être 🌱", label: "🤫 Chuchoter pendant le travail en groupe et coopérer." },
+  { cat: "Les savoir-être 🌱", label: "✨ Rendre un travail soigné et recherché." },
+  { cat: "Méthodologie 🧰", label: "📋 Respecter une consigne." },
+  { cat: "Méthodologie 🧰", label: "🛠️ Utiliser les outils personnels et les outils de la classe." },
+  { cat: "Lire, Dire, Écrire 📖", label: "🔍 Témoigner de sa compréhension de la lecture." },
+  { cat: "Lire, Dire, Écrire 📖", label: "✍️ Utiliser une écriture qui permette d'être lu par tous." },
+  { cat: "Lire, Dire, Écrire 📖", label: "📝 Rédiger une ou plusieurs phrases qui ont du sens." },
+  { cat: "Lire, Dire, Écrire 📖", label: "🎤 Présenter clairement un travail de son groupe." },
+  { cat: "Lire, Dire, Écrire 📖", label: "📚 Oraliser un texte lu ou raconter une histoire." },
+  { cat: "Étude de la langue 🔤", label: "🔠 Savoir écrire et accorder les mots." },
+  { cat: "Étude de la langue 🔤", label: "🗣️ Employer un vocabulaire précis." },
+  { cat: "Mathématiques 🔢", label: "🧩 Témoigner de sa compréhension du problème." },
+  { cat: "Mathématiques 🔢", label: "➗ Choisir la bonne opération et une méthode pour calculer." },
+  { cat: "Mathématiques 🔢", label: "💭 Communiquer sa réponse par une phrase-réponse." },
+  { cat: "Mathématiques 🔢", label: "📏 Calculer avec les mesures." },
+  { cat: "Mathématiques 🔢", label: "🔷 Tracer des figures avec précision." },
+  { cat: "Histoire", label: "📅 Organiser des événements en utilisant des repères de temps." },
+  { cat: "Histoire", label: "🕰️ Raconter un événement en le situant dans le temps." },
+  { cat: "Histoire", label: "🏛️ Expliquer les changements entre autrefois et aujourd'hui." },
+  { cat: "Géographie", label: "🧭 Se repérer et se déplacer." },
+  { cat: "Géographie", label: "🗺️ Présenter un lieu." },
+  { cat: "Géographie", label: "🌍 Comparer différents lieux." },
+  { cat: "Sciences", label: "🔎 Questionner et décrire ce que j'observe." },
+  { cat: "Sciences", label: "🧪 Expérimenter pour répondre à une question." },
+  { cat: "Sciences", label: "🛠️ Fabriquer ou utiliser un objet pour répondre à un besoin." },
+  { cat: "EMC et EVAR", label: "🤝 Respecter les autres et coopérer avec eux." },
+  { cat: "EMC et EVAR", label: "💬 Exprimer ses idées, ses besoins et ses émotions." },
+  { cat: "EMC et EVAR", label: "⚖️ Agir de façon responsable et savoir demander de l'aide." },
+  { cat: "Anglais", label: "🎵 Chanter seul(e) une comptine." },
+  { cat: "Anglais", label: "💬 Dire un dialogue très simple." },
+  { cat: "Anglais", label: "🌍 Connaître du vocabulaire et des éléments de culture." },
+  { cat: "Arts", label: "🎨 Créer en choisissant des techniques et des matériaux." },
+  { cat: "Arts", label: "👀 Observer, décrire une œuvre, exprimer ses émotions." }
+];
+
+const MISSIONS_STORAGE_KEY = 'cahier_de_classe_missions_v1';
+function loadMissionsStore(){
+  try{ return JSON.parse(localStorage.getItem(MISSIONS_STORAGE_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function saveMissionsStore(arr){
+  try{ localStorage.setItem(MISSIONS_STORAGE_KEY, JSON.stringify(arr)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function missionAcquise(rec){
+  return rec.v1 >= 3 && rec.v2 >= 3 && rec.v3 >= 3;
+}
+function upsertMissionRecord(rec){
+  const store = loadMissionsStore();
+  const idx = store.findIndex(r => r.eleve === rec.eleve && r.label === rec.label);
+  if (idx >= 0) store[idx] = rec; else store.push(rec);
+  saveMissionsStore(store);
+  // colonnes du Sheet : Élève, Catégorie, Compétence, Validation 1, Validation 2, Validation 3, Acquis
+  debouncedSheetSaveRow(
+    `Missions|${rec.eleve}|${rec.label}`,
+    'Missions',
+    [rec.eleve, rec.cat, rec.label, rec.v1, rec.v2, rec.v3, missionAcquise(rec) ? 1 : 0],
+    [0, 2] // upsert sur Élève + Compétence
+  );
+}
+
+async function syncMissionsFromSheet(){
+  const rows = await sheetGetRows('Missions');
+  if (!rows || rows.length <= 1) return;
+  const store = loadMissionsStore();
+  const key = r => `${r.eleve}|${r.label}`;
+  const known = new Map(store.map(r => [key(r), r]));
+  let changed = false;
+  rows.slice(1).forEach(r => {
+    const [eleve, cat, label, v1, v2, v3] = r;
+    if (!eleve || !label) return;
+    const rec = { eleve, cat: cat || '', label, v1: parseInt(v1,10)||0, v2: parseInt(v2,10)||0, v3: parseInt(v3,10)||0 };
+    const k = key(rec);
+    const existing = known.get(k);
+    if (!existing || existing.v1 !== rec.v1 || existing.v2 !== rec.v2 || existing.v3 !== rec.v3){
+      known.set(k, rec);
+      changed = true;
+    }
+  });
+  if (changed) saveMissionsStore(Array.from(known.values()));
+}
+
+function getMissionRecord(eleve, label){
+  const store = loadMissionsStore();
+  return store.find(r => r.eleve === eleve && r.label === label) || { eleve, label, v1: 0, v2: 0, v3: 0 };
+}
+
+// Compétences cochées à évaluer maintenant (persisté pour retrouver sa sélection)
+const MISSIONS_SELECTED_KEY = 'cahier_de_classe_missions_selected_v1';
+function loadSelectedSkills(){
+  try{ return new Set(JSON.parse(localStorage.getItem(MISSIONS_SELECTED_KEY) || '[]')); }
+  catch(e){ return new Set(); }
+}
+function saveSelectedSkills(set){
+  try{ localStorage.setItem(MISSIONS_SELECTED_KEY, JSON.stringify(Array.from(set))); }
+  catch(e){ /* stockage indisponible */ }
+}
+
+function renderMissionsSkillPicker(){
+  const sel = document.getElementById('missionsSkillSelect');
+  if (sel.options.length > 0) return; // déjà peuplé
+  const selected = loadSelectedSkills();
+  let currentGroup = null;
+  MISSIONS_SKILLS.forEach(skill => {
+    if (skill.cat !== currentGroup){
+      currentGroup = skill.cat;
+      const og = document.createElement('optgroup');
+      og.label = currentGroup;
+      og.dataset.cat = currentGroup;
+      sel.appendChild(og);
+    }
+    const opt = document.createElement('option');
+    opt.value = skill.label;
+    opt.textContent = skill.label;
+    opt.selected = selected.has(skill.label);
+    sel.lastChild.appendChild(opt);
+  });
+  sel.addEventListener('change', () => {
+    const chosen = new Set(Array.from(sel.selectedOptions).map(o => o.value));
+    saveSelectedSkills(chosen);
+    renderMissions();
+  });
+}
+
+function renderMissions(){
+  const container = document.getElementById('missionsContent');
+  container.innerHTML = '';
+  const selected = loadSelectedSkills();
+  const skillsToShow = MISSIONS_SKILLS.filter(s => selected.has(s.label));
+
+  if (skillsToShow.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Choisis au moins une compétence ci-dessus pour commencer à évaluer.";
+    container.appendChild(note);
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'missions-table';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const cornerTh = document.createElement('th');
+  cornerTh.textContent = 'Élève';
+  headRow.appendChild(cornerTh);
+  skillsToShow.forEach(skill => {
+    const th = document.createElement('th');
+    th.textContent = skill.label;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  STUDENTS.forEach(name => {
+    const tr = document.createElement('tr');
+    const nameTd = document.createElement('td');
+    nameTd.textContent = name;
+    tr.appendChild(nameTd);
+
+    let allAcquis = true;
+    skillsToShow.forEach(skill => {
+      const rec = Object.assign({ eleve: name, cat: skill.cat, label: skill.label }, getMissionRecord(name, skill.label));
+      if (!missionAcquise(rec)) allAcquis = false;
+      const td = document.createElement('td');
+      const chipsWrap = document.createElement('div');
+      chipsWrap.className = 'missions-cell-chips';
+      ['v1','v2','v3'].forEach((key, vi) => {
+        const chip = document.createElement('button');
+        chip.className = 'missions-mini-chip';
+        chip.textContent = rec[key];
+        chip.title = `Validation ${vi+1}`;
+        if (rec[key] >= 3) chip.classList.add('done');
+        chip.addEventListener('click', () => {
+          rec[key] = (rec[key] + 1) % 4;
+          upsertMissionRecord(rec);
+          renderMissions();
+        });
+        chipsWrap.appendChild(chip);
+      });
+      td.appendChild(chipsWrap);
+      tr.appendChild(td);
+    });
+    if (allAcquis) tr.classList.add('mission-cell-acquise');
+
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
 function renderEvaluations(dateStr){
   document.getElementById('evalDate').value = dateStr;
   document.getElementById('evalDayLabel').textContent = dayLabelFr(dateStr);
@@ -2085,6 +2378,32 @@ function renderSuivi(){
   const showExtras = !disciplineFilter && !domaineFilter;
 
   if (showExtras){
+    // ---- Missions (lecture seule ici ; modifiable dans l'onglet Missions) ----
+    const missionsForStudent = MISSIONS_SKILLS.map(s => Object.assign({ cat: s.cat, label: s.label }, getMissionRecord(student, s.label)));
+    const acquisCount = missionsForStudent.filter(missionAcquise).length;
+    const missionsBlock = document.createElement('div');
+    missionsBlock.className = 'discipline-group';
+    const h3m = document.createElement('h3');
+    h3m.textContent = 'Missions';
+    missionsBlock.appendChild(h3m);
+    const innerM = document.createElement('div');
+    innerM.className = 'domaine-block';
+    const summaryM = document.createElement('div');
+    summaryM.className = 'result-line';
+    summaryM.style.display = 'block';
+    summaryM.style.fontWeight = '600';
+    summaryM.textContent = `⭐ ${acquisCount} compétence${acquisCount>1?'s':''} acquise${acquisCount>1?'s':''} sur ${MISSIONS_SKILLS.length}`;
+    innerM.appendChild(summaryM);
+    missionsForStudent.filter(m => m.v1 || m.v2 || m.v3).forEach(m => {
+      const line = document.createElement('div');
+      line.className = 'result-line';
+      line.style.display = 'block';
+      line.textContent = `${m.label} — V1:${m.v1} V2:${m.v2} V3:${m.v3}${missionAcquise(m) ? ' ⭐ Acquis' : ''}`;
+      innerM.appendChild(line);
+    });
+    missionsBlock.appendChild(innerM);
+    container.appendChild(missionsBlock);
+
     // ---- Comportement (lecture seule ici ; modifiable dans l'onglet Comportement) ----
     if (comportStore.length > 0){
       const comportBlock = document.createElement('div');
@@ -2835,7 +3154,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       refreshProgressionData().then(ok => { if (ok) renderEvaluations(document.getElementById('evalDate').value); });
     }
     if (btn.dataset.tab === 'suivi'){
-      Promise.all([syncEvalFromSheet(), syncComportFromSheet(), syncObsFromSheet()]).then(renderSuivi);
+      Promise.all([syncEvalFromSheet(), syncComportFromSheet(), syncObsFromSheet(), syncMissionsFromSheet()]).then(renderSuivi);
       renderSuivi();
     }
     if (btn.dataset.tab === 'observations'){
@@ -2857,6 +3176,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         if (document.getElementById('comportEleveView').style.display !== 'none') renderComportEleve();
       });
       renderComportJour(document.getElementById('comportDate').value);
+    }
+    if (btn.dataset.tab === 'missions'){
+      renderMissionsSkillPicker();
+      syncMissionsFromSheet().then(renderMissions);
+      renderMissions();
     }
     if (btn.dataset.tab === 'lecons'){
       refreshProgressionData().then(ok => { if (ok) renderLecons(document.getElementById('leconsWeekLabel').dataset.monday); });
