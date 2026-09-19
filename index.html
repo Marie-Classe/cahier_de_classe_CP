@@ -944,7 +944,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 09h30 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 10h05 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -2541,8 +2541,7 @@ function renderSuivi(){
   if (domaineFilter) store = store.filter(r => (r.domaine || '(sans domaine)') === domaineFilter);
 
   const obsStore = loadObsStore().filter(o => o.eleve === student).sort((a,b) => b.date.localeCompare(a.date));
-  const todayStrForComport = fmtDate(new Date());
-  const comportStore = loadComportStore().filter(r => r.eleve === student && r.date <= todayStrForComport).sort((a,b) => b.date.localeCompare(a.date));
+  const comportStore = buildComportHistoryForStudent(student);
 
   const showExtras = !disciplineFilter && !domaineFilter;
 
@@ -3646,21 +3645,27 @@ function buildComportHistoryRow(r, student, editable, onChange){
   return row;
 }
 
+// Reconstruit l'historique complet d'un élève : tous les jours de classe depuis la
+// rentrée jusqu'à aujourd'hui (un jour de classe sans rappel enregistré = étoile
+// gagnée par défaut). "Aujourd'hui" peut être un jour sans classe, auquel cas on
+// s'arrête simplement au dernier jour de classe déjà passé.
+function buildComportHistoryForStudent(student){
+  const todayStr = fmtDate(new Date());
+  const allDays = getAllSchoolDaysUpTo(todayStr);
+  const recordsByDate = {};
+  loadComportStore().filter(r => r.eleve === student).forEach(r => { recordsByDate[r.date] = r; });
+  return allDays
+    .map(date => recordsByDate[date] || { date, eleve: student, quarters: [0,0,0,0] })
+    .sort((a,b) => b.date.localeCompare(a.date));
+}
+
 function renderComportEleve(){
   populateComportStudentSelect();
   const student = document.getElementById('comportStudent').value;
   const container = document.getElementById('comportEleveContent');
   container.innerHTML = '';
 
-  const todayStr = fmtDate(new Date());
-  const allDays = getAllSchoolDaysUpTo(todayStr);
-  const recordsByDate = {};
-  loadComportStore().filter(r => r.eleve === student).forEach(r => { recordsByDate[r.date] = r; });
-
-  // Par défaut, un jour de classe sans rappel enregistré = étoile gagnée.
-  const store = allDays
-    .map(date => recordsByDate[date] || { date, eleve: student, quarters: [0,0,0,0] })
-    .sort((a,b) => b.date.localeCompare(a.date));
+  const store = buildComportHistoryForStudent(student);
 
   if (store.length === 0){
     const note = document.createElement('div');
