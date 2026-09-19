@@ -313,17 +313,23 @@
     max-width: 140px;
     white-space: normal;
     font-size: 0.72rem;
+    position: -webkit-sticky;
     position: sticky;
     top: 0;
     z-index: 2;
   }
-  .missions-table th:first-child{ z-index: 3; }
   .missions-table td:first-child, .missions-table th:first-child{
     text-align: left;
+    position: -webkit-sticky;
     position: sticky;
     left: 0;
     background: white;
-    z-index: 1;
+    z-index: 3;
+  }
+  .missions-table th:first-child{
+    top: 0;
+    background: var(--paper);
+    z-index: 4;
   }
   .missions-table tr.mission-cell-acquise td{ background: #FFF9EC; }
   .eval-cell-validated{
@@ -938,7 +944,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 07h20 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 09h30 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1708,19 +1714,21 @@ function buildHyperlinkFormula(url, label){
   return `=LIEN_HYPERTEXTE("${safeUrl}";"${safeLabel}")`;
 }
 
-function copyAnalyseToClipboard(){
+function exportAnalyseToSheet(){
   const dateStr = document.getElementById('journalDate').value;
   const texte = document.getElementById('analyseText').value.trim();
   if (!texte){ showToast("Rien à exporter : l'analyse de pratique est vide."); return; }
-  safeCopyText([dateStr, texte].join('\t'), 'Copié — colle dans l\'onglet "Analyse de pratique" du Google Sheet');
+  sheetSaveRow('Analyse de pratique', [dateStr, texte], [0]).then(ok => {
+    if (ok) showToast('Analyse de pratique envoyée vers l\'onglet "Analyse de pratique" du Sheet.');
+  });
 }
 
-function copyJournalToClipboard(){
+function exportJournalDayToSheet(){
   const dateStr = document.getElementById('journalDate').value;
   const wd = weekdayNameFr(dateStr);
   const slots = getEffectiveSlots(wd) || [];
   const doneStore = loadJournalDone();
-  let lines = [];
+  const rowsToSend = [];
   slots.forEach((slot, idx) => {
     const colorName = MODALITE_TO_COLORNAME[slot.modalite];
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
@@ -1728,22 +1736,26 @@ function copyJournalToClipboard(){
     if (matches.length > 0){
       matches.forEach((found, matchIdx) => {
         const rowKey = matches.length > 1 ? `${idx}_${matchIdx}` : idx;
-        const fait = doneStore[journalNoteKey(dateStr, rowKey)] ? '1' : '0';
+        if (!doneStore[journalNoteKey(dateStr, rowKey)]) return; // seulement ce qui est coché "fait"
         const label = found.title + (found.extra ? ` — ${found.extra}` : '') + evalNumberSuffix(found.rawValue);
         const titreCell = found.link ? buildHyperlinkFormula(found.link, label) : label;
         // Colonnes : Date, Heure, Matière, Modalité, Titre (lien cliquable si dispo), Lien, Notes, Fait
-        lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', '', fait].join('\t'));
+        rowsToSend.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', '', '1']);
       });
     } else {
+      if (!doneStore[journalNoteKey(dateStr, idx)]) return;
       const ta = document.querySelector(`textarea[data-slot-idx="${idx}"]`);
       const txt = ta ? ta.value.trim() : '';
-      const fait = doneStore[journalNoteKey(dateStr, idx)] ? '1' : '0';
-      lines.push([dateStr, slot.heure || '', slot.matiere || '', slot.modalite || '', txt, '', '', fait].join('\t'));
+      rowsToSend.push([dateStr, slot.heure || '', slot.matiere || '', slot.modalite || '', txt, '', '', '1']);
     }
   });
-  // L'analyse de pratique n'est plus mélangée ici : elle part automatiquement et en
-  // direct vers l'onglet "Analyse de pratique" du Sheet (voir saveAnalyseForDate).
-  safeCopyText(lines.join('\n'), 'Copié (avec ce qui est coché "Fait") — colle dans l\'onglet "Cahier Journal" du Google Sheet');
+  if (rowsToSend.length === 0){
+    showToast('Rien à exporter : aucune case "fait" cochée pour ce jour.');
+    return;
+  }
+  sheetSaveRows('Cahier-journal', rowsToSend).then(ok => {
+    if (ok) showToast(`Envoyé : ${rowsToSend.length} ligne${rowsToSend.length>1?'s':''} vers l'onglet "Cahier-journal" du Sheet.`);
+  });
 }
 
 // Un devoir ne peut être "à faire pour" un jour sans classe.
@@ -1894,6 +1906,49 @@ function normalizeDateStr(v){
     }
   }
   return v; // format non reconnu : on garde tel quel plutôt que de perdre la donnée
+}
+
+// Nettoyage ponctuel : fusionne les doublons déjà présents en local suite au bug de
+// date corrompue ("vendredi 11 septembre" au lieu de "2026-09-11"), en normalisant
+// toutes les dates puis en fusionnant les entrées qui deviennent identiques.
+function migrateStoreDates(loadFn, saveFn, keyFn, pickBetter){
+  const store = loadFn();
+  const merged = new Map();
+  let changed = false;
+  store.forEach(r => {
+    const normDate = normalizeDateStr(r.date);
+    if (normDate !== r.date) changed = true;
+    const rec = Object.assign({}, r, { date: normDate });
+    const k = keyFn(rec);
+    const existing = merged.get(k);
+    if (!existing){
+      merged.set(k, rec);
+    } else {
+      changed = true;
+      merged.set(k, pickBetter ? pickBetter(existing, rec) : rec);
+    }
+  });
+  if (changed) saveFn(Array.from(merged.values()));
+}
+
+function runOneTimeDateMigration(){
+  migrateStoreDates(
+    loadEvalStore, saveEvalStore,
+    r => [r.date, r.discipline, r.titre, r.eleve].join('|'),
+    (a, b) => (parseInt(b.score,10)||0) >= (parseInt(a.score,10)||0) ? b : a
+  );
+  migrateStoreDates(
+    loadComportStore, saveComportStore,
+    r => `${r.date}|${r.eleve}`,
+    (a, b) => {
+      const sum = q => q.reduce((s,v)=>s+v,0);
+      return sum(b.quarters) >= sum(a.quarters) ? b : a;
+    }
+  );
+  migrateStoreDates(
+    loadObsStore, saveObsStore,
+    r => `${r.date}|${r.eleve}|${r.texte}`
+  );
 }
 
 // Récupère les évaluations déjà présentes dans le Google Sheet (faites depuis un autre
@@ -2258,8 +2313,8 @@ function renderEvaluations(dateStr){
       let displayTitle = found.title;
       if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
       if (subjectKey === 'Lecture'){
-        columns.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (orale)` });
         columns.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (écrite)` });
+        columns.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (orale)` });
       } else {
         columns.push({ subjectKey, domaine: found.domain || '', titre: displayTitle });
       }
@@ -2486,7 +2541,8 @@ function renderSuivi(){
   if (domaineFilter) store = store.filter(r => (r.domaine || '(sans domaine)') === domaineFilter);
 
   const obsStore = loadObsStore().filter(o => o.eleve === student).sort((a,b) => b.date.localeCompare(a.date));
-  const comportStore = loadComportStore().filter(r => r.eleve === student).sort((a,b) => b.date.localeCompare(a.date));
+  const todayStrForComport = fmtDate(new Date());
+  const comportStore = loadComportStore().filter(r => r.eleve === student && r.date <= todayStrForComport).sort((a,b) => b.date.localeCompare(a.date));
 
   const showExtras = !disciplineFilter && !domaineFilter;
 
@@ -3451,6 +3507,7 @@ async function sheetSaveRows(tab, rows){
 }
 
 async function ensureAllStudentsForDate(dateStr){
+  if (dateStr > fmtDate(new Date())) return; // jamais pré-remplir un jour qui n'est pas encore passé
   if (comportCompletedDates.has(dateStr)) return;
   comportCompletedDates.add(dateStr);
   const store = loadComportStore();
@@ -3702,6 +3759,7 @@ function rerenderAfterProgressionRefresh(){
 
 (function init(){
  try {
+  runOneTimeDateMigration();
   // find a sensible default date: today if within range, else earliest date found
   let allDates = [];
   Object.values(SUBJECT_DATA).forEach(s => Object.values(s.date_cols).forEach(d => allDates.push(d)));
@@ -3717,8 +3775,8 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('journalDate').addEventListener('change', e => renderJournal(e.target.value));
   document.getElementById('prevDay').addEventListener('click', ()=>shiftJournalDay(-1));
   document.getElementById('nextDay').addEventListener('click', ()=>shiftJournalDay(1));
-  document.getElementById('copyJournal').addEventListener('click', copyJournalToClipboard);
-  document.getElementById('copyAnalyse').addEventListener('click', copyAnalyseToClipboard);
+  document.getElementById('copyJournal').addEventListener('click', exportJournalDayToSheet);
+  document.getElementById('copyAnalyse').addEventListener('click', exportAnalyseToSheet);
 
   document.getElementById('prevWeekHw').addEventListener('click', ()=>shiftHwWeek(-1));
   document.getElementById('nextWeekHw').addEventListener('click', ()=>shiftHwWeek(1));
