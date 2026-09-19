@@ -312,7 +312,11 @@
     max-width: 140px;
     white-space: normal;
     font-size: 0.72rem;
+    position: sticky;
+    top: 0;
+    z-index: 2;
   }
+  .missions-table th:first-child{ z-index: 3; }
   .missions-table td:first-child, .missions-table th:first-child{
     text-align: left;
     position: sticky;
@@ -321,6 +325,14 @@
     z-index: 1;
   }
   .missions-table tr.mission-cell-acquise td{ background: #FFF9EC; }
+  .eval-cell-validated{
+    background: var(--evaluation) !important;
+    color: white;
+  }
+  .eval-cell-validated .missions-mini-chip{
+    background: white;
+    color: var(--ink);
+  }
   .missions-cell-chips{ display:flex; gap:3px; justify-content:center; }
   .missions-mini-chip{
     width: 20px; height: 20px;
@@ -925,7 +937,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 06h55 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 07h05 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -2318,6 +2330,8 @@ function renderEvaluations(dateStr){
 
     columns.forEach(col => {
       const td = document.createElement('td');
+      const score = getScore(col, name);
+      if (score >= 1) td.classList.add('eval-cell-validated');
       const wrap = document.createElement('div');
       wrap.className = 'missions-cell-chips';
 
@@ -2330,7 +2344,7 @@ function renderEvaluations(dateStr){
       });
 
       const valSpan = document.createElement('span');
-      valSpan.textContent = getScore(col, name);
+      valSpan.textContent = score;
       valSpan.style.minWidth = '18px';
       valSpan.style.display = 'inline-block';
 
