@@ -49,7 +49,7 @@
     position: fixed;
     left: 0; right: 0; bottom: 0;
     display:grid;
-    grid-template-columns: repeat(11, 1fr);
+    grid-template-columns: repeat(10, 1fr);
     gap: 0;
     padding: 6px 2px calc(6px + env(safe-area-inset-bottom, 0px));
     background: var(--paper);
@@ -238,6 +238,13 @@
     font-size: 0.78rem;
     color: var(--ink-soft);
   }
+  .slot-planned{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    padding: 0 14px 8px;
+  }
   .slot-link-icon{
     text-decoration:none;
     font-size: 0.95rem;
@@ -402,144 +409,6 @@
     cursor:pointer;
   }
   button.primary:active{ opacity:0.85; }
-
-  /* ---------- PROFIL (fiche élève : infos & santé, actions, rendez-vous) ---------- */
-  .profil-header-row{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin-bottom:10px;
-  }
-  .profil-header-row input[type="text"]{
-    flex:1;
-    font-family: -apple-system, sans-serif;
-    font-size:0.95rem;
-    padding:9px 12px;
-    border-radius:10px;
-    border:1px solid var(--line);
-    background:var(--card);
-    color:var(--ink);
-  }
-  .profil-subtabs{
-    display:flex;
-    gap:6px;
-    margin: 6px 0 14px;
-    flex-wrap:wrap;
-  }
-  .profil-subtab-btn{
-    font-family: -apple-system, sans-serif;
-    font-size:0.8rem;
-    padding:7px 12px;
-    border-radius:20px;
-    border:1px solid var(--line);
-    background:var(--card);
-    color:var(--ink-soft);
-    cursor:pointer;
-  }
-  .profil-subtab-btn.active{
-    background:var(--ink);
-    color:white;
-    border-color:var(--ink);
-  }
-  .profil-grid{
-    display:grid;
-    grid-template-columns: 1fr;
-    gap:8px;
-  }
-  .profil-toggle-row{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:12px;
-    padding:10px 12px;
-  }
-  .profil-toggle-dot{
-    width:26px; height:26px; border-radius:50%;
-    border:2px solid var(--line);
-    background:transparent;
-    flex:0 0 auto;
-    cursor:pointer;
-  }
-  .profil-toggle-dot.on{
-    background:var(--autonomie);
-    border-color:#4E8F4E;
-  }
-  .profil-toggle-label{
-    flex:1;
-    font-family:-apple-system, sans-serif;
-    font-size:0.88rem;
-  }
-  .profil-toggle-note{
-    font-family:-apple-system, sans-serif;
-    font-size:0.75rem;
-    color:var(--ink-soft);
-    font-style:italic;
-    cursor:pointer;
-    max-width:120px;
-    text-align:right;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
-  }
-  .profil-add-col-row{
-    display:flex;
-    gap:8px;
-    margin-top:12px;
-  }
-  .profil-add-col-row input{
-    flex:1;
-    font-family:-apple-system, sans-serif;
-    font-size:0.85rem;
-    padding:8px 10px;
-    border-radius:9px;
-    border:1px solid var(--line);
-  }
-  .profil-remove-col{
-    background:none; border:none; color:#B33; cursor:pointer; font-size:0.85rem; flex:0 0 auto;
-  }
-  .action-item, .rdv-item{
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:12px;
-    padding:10px 12px;
-    margin-bottom:8px;
-    font-family:-apple-system, sans-serif;
-    font-size:0.87rem;
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    gap:10px;
-  }
-  .action-item-text, .rdv-item-text{ flex:1; white-space:pre-wrap; }
-  .rdv-item-meta{ color:var(--ink-soft); font-size:0.75rem; margin-bottom:2px; }
-  .action-del-btn{
-    background:none; border:none; color:#B33; cursor:pointer; font-size:0.8rem; flex:0 0 auto;
-  }
-  .profil-add-form{
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:12px;
-    padding:12px;
-    margin-bottom:14px;
-  }
-  .profil-add-form textarea, .profil-add-form input, .profil-add-form select{
-    width:100%;
-    font-family:-apple-system, sans-serif;
-    font-size:0.87rem;
-    padding:9px;
-    border-radius:9px;
-    border:1px solid var(--line);
-    margin-bottom:8px;
-    background:#FFFDF9;
-  }
-  @media print{
-    body *{ visibility:hidden; }
-    nav.tabs, .actions, .profil-add-form, .profil-add-col-row{ display:none !important; }
-    #ficheImprimable, #ficheImprimable *{ visibility:visible; }
-    #ficheImprimable{ position:absolute; left:0; top:0; width:100%; padding:20px; }
-  }
   .toast{
     position:fixed;
     bottom: calc(78px + env(safe-area-inset-bottom, 0px));
@@ -1056,7 +925,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-14 19h29 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 06h55 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1087,10 +956,6 @@
   <button class="tab-btn" data-tab="suivi">
     <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.8-3.2 3-4.8 5.5-4.8s4.7 1.6 5.5 4.8"/><circle cx="17" cy="9" r="2.4"/><path d="M15 14.5c1.9.2 3.5 1.6 4.1 4"/></svg>
     <span>Suivi</span>
-  </button>
-  <button class="tab-btn" data-tab="profil">
-    <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><circle cx="9" cy="10" r="2.3"/><path d="M5.5 17c.6-2.2 1.9-3.3 3.5-3.3s2.9 1.1 3.5 3.3"/><path d="M14.5 9h4M14.5 12h4"/></svg>
-    <span>Profil</span>
   </button>
   <button class="tab-btn" data-tab="apc">
     <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4.3 4.3 0 0 1 7-3.3A4.3 4.3 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M12 9v4M10 11h4"/></svg>
@@ -1160,12 +1025,10 @@
   <!-- DEVOIRS -->
   <section id="devoirs" class="panel">
     <div class="datebar">
-      <button class="navbtn" id="prevDayHw">←</button>
-      <input type="date" id="hwDate">
-      <button class="navbtn" id="nextDayHw">→</button>
+      <button class="navbtn" id="prevWeekHw">←</button>
+      <span id="hwWeekLabel" style="font-family:-apple-system,sans-serif; font-size:0.9rem; color:var(--ink-soft); flex:1; text-align:center;"></span>
+      <button class="navbtn" id="nextWeekHw">→</button>
     </div>
-    <div class="day-label" id="hwDayLabel"></div>
-    <br>
     <div id="hwContent"></div>
     <div class="actions">
       <button class="primary" id="copyHw">Copier pour coller dans le Google Sheet</button>
@@ -1209,54 +1072,6 @@
     <div id="suiviContent"></div>
   </section>
 
-  <!-- PROFIL (infos & santé, actions à mettre en place, rendez-vous, export PDF) -->
-  <section id="profil" class="panel">
-    <div class="profil-header-row">
-      <input type="text" id="profilClasseNom" placeholder="Nom de la classe (ex. Classe de Mme Flichy)">
-      <button class="navbtn" id="saveProfilClasseNom" title="Enregistrer">✓</button>
-    </div>
-    <div class="datebar">
-      <select id="profilStudent" class="suivi-select"></select>
-      <button class="navbtn" id="printFiche" title="Exporter en PDF">🖨️</button>
-    </div>
-
-    <div class="profil-subtabs">
-      <button class="profil-subtab-btn active" data-psub="sante">Infos &amp; santé</button>
-      <button class="profil-subtab-btn" data-psub="actions">Actions à mettre en place</button>
-      <button class="profil-subtab-btn" data-psub="rdv">Rendez-vous</button>
-    </div>
-
-    <div id="ficheImprimable">
-      <h2 id="ficheEleveTitre" style="font-family:-apple-system,sans-serif; font-size:1.1rem; margin:0 0 12px;"></h2>
-
-      <div id="profilSanteView">
-        <div class="profil-grid" id="profilSanteGrid"></div>
-        <div class="profil-add-col-row">
-          <input type="text" id="profilNewColLabel" placeholder="Ajouter un élément à suivre (ex. Lunettes, Sieste…)">
-          <button class="navbtn" id="profilAddCol">+</button>
-        </div>
-      </div>
-
-      <div id="profilActionsView" style="display:none;">
-        <div class="profil-add-form">
-          <textarea id="profilNewAction" rows="2" placeholder="Nouvelle action à mettre en place…"></textarea>
-          <button class="primary" id="profilAddAction">Ajouter</button>
-        </div>
-        <div id="profilActionsList"></div>
-      </div>
-
-      <div id="profilRdvView" style="display:none;">
-        <div class="profil-add-form">
-          <input type="date" id="profilRdvDate">
-          <input type="text" id="profilRdvType" placeholder="Type de rendez-vous (ex. RASED, orthophoniste, parents…)">
-          <textarea id="profilRdvNotes" rows="2" placeholder="Notes…"></textarea>
-          <button class="primary" id="profilAddRdv">Enregistrer le rendez-vous</button>
-        </div>
-        <div id="profilRdvList"></div>
-      </div>
-    </div>
-  </section>
-
   <!-- APC -->
   <section id="apc" class="panel">
     <div id="apcContent"></div>
@@ -1296,8 +1111,10 @@
 
   <!-- MISSIONS (savoir-être / savoir-faire, validation par paliers) -->
   <section id="missions" class="panel">
-    <p class="empty-note" style="margin-bottom:10px;">Choisis une ou plusieurs compétences à évaluer (Ctrl/Cmd+clic ou glisser pour en choisir plusieurs). Tape sur une puce dans le tableau pour la faire avancer (0 → 1 → 2 → 3). "Acquis" dès que les 3 validations atteignent 3.</p>
-    <select id="missionsSkillSelect" multiple size="6" style="width:100%; margin-bottom:14px; font-family:-apple-system,sans-serif; font-size:0.85rem; padding:6px; border-radius:8px; border:1px solid var(--line);"></select>
+    <details id="missionsSkillDetails" style="margin-bottom:14px; border:1px solid var(--line); border-radius:10px; background:white;">
+      <summary style="padding:12px 16px; cursor:pointer; font-family:-apple-system,sans-serif; font-weight:600; font-size:0.9rem;">Choisir des compétences à évaluer ▾</summary>
+      <div id="missionsSkillPicker" style="padding:0 16px 12px; max-height:320px; overflow-y:auto;"></div>
+    </details>
     <div id="missionsContent" style="overflow-x:auto;"></div>
   </section>
 
@@ -1522,6 +1339,8 @@ function saveAnalyseForDate(dateStr, texte){
   store[dateStr] = texte;
   try{ localStorage.setItem(ANALYSE_STORAGE_KEY, JSON.stringify(store)); }
   catch(e){ /* stockage indisponible */ }
+  // colonnes du Sheet (onglet séparé "Analyse de pratique") : Date, Texte
+  debouncedSheetSaveRow(`AnalysePratique|${dateStr}`, 'Analyse de pratique', [dateStr, texte], [0]);
 }
 
 // ---------- Agenda Google (optionnel, lecture via backend Vercel) ----------
@@ -1670,6 +1489,13 @@ async function renderJournal(dateStr){
     const card = document.createElement('div');
     card.className = 'subject-card slot-line';
 
+    const colorName = MODALITE_TO_COLORNAME[slot.modalite];
+    const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
+    let matches = [];
+    if (colorName && subjectKey){
+      matches = getAllEntriesForModality(subjectKey, dateStr, colorName);
+    }
+
     if (agendaEvent){
       const row = document.createElement('div');
       row.className = 'slot-row';
@@ -1705,17 +1531,23 @@ async function renderJournal(dateStr){
       card.appendChild(row);
       card.style.setProperty('--card-mod-color', 'var(--gold)');
       if (loadJournalDone()[journalNoteKey(dateStr, idx)]) card.classList.add('card-done');
+
+      // Ce qui était prévu à l'origine dans l'EDT, affiché en dessous en plus discret,
+      // pour pouvoir rattraper facilement ce qui n'a pas été fait.
+      const plannedLabel = matches.length > 0
+        ? matches.map(m => m.title + (m.extra ? ` — ${m.extra}` : '') + evalNumberSuffix(m.rawValue)).join(' · ')
+        : (slot.matiere || slot.modalite || null);
+      if (plannedLabel){
+        const plannedRow = document.createElement('div');
+        plannedRow.className = 'slot-planned';
+        plannedRow.textContent = `Prévu à l'origine : ${slot.matiere || ''} — ${plannedLabel}`;
+        card.appendChild(plannedRow);
+      }
+
       container.appendChild(card);
       return;
     }
 
-    const colorName = MODALITE_TO_COLORNAME[slot.modalite];
-    const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
-
-    let matches = [];
-    if (colorName && subjectKey){
-      matches = getAllEntriesForModality(subjectKey, dateStr, colorName);
-    }
     const modDispForColor = MODALITE_DISPLAY[slot.modalite];
 
     if (matches.length === 0){
@@ -1864,29 +1696,31 @@ function copyJournalToClipboard(){
   const dateStr = document.getElementById('journalDate').value;
   const wd = weekdayNameFr(dateStr);
   const slots = getEffectiveSlots(wd) || [];
+  const doneStore = loadJournalDone();
   let lines = [];
   slots.forEach((slot, idx) => {
     const colorName = MODALITE_TO_COLORNAME[slot.modalite];
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
     const matches = (colorName && subjectKey) ? getAllEntriesForModality(subjectKey, dateStr, colorName) : [];
     if (matches.length > 0){
-      matches.forEach(found => {
+      matches.forEach((found, matchIdx) => {
+        const rowKey = matches.length > 1 ? `${idx}_${matchIdx}` : idx;
+        const fait = doneStore[journalNoteKey(dateStr, rowKey)] ? '1' : '0';
         const label = found.title + (found.extra ? ` — ${found.extra}` : '') + evalNumberSuffix(found.rawValue);
         const titreCell = found.link ? buildHyperlinkFormula(found.link, label) : label;
-        // Colonnes : Date, Heure, Matière, Modalité, Titre (lien cliquable si dispo), Lien, Notes
-        lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', ''].join('\t'));
+        // Colonnes : Date, Heure, Matière, Modalité, Titre (lien cliquable si dispo), Lien, Notes, Fait
+        lines.push([dateStr, slot.heure || '', slot.matiere, found.modality, titreCell, '', '', fait].join('\t'));
       });
     } else {
       const ta = document.querySelector(`textarea[data-slot-idx="${idx}"]`);
       const txt = ta ? ta.value.trim() : '';
-      lines.push([dateStr, slot.heure || '', slot.matiere || '', slot.modalite || '', txt, '', ''].join('\t'));
+      const fait = doneStore[journalNoteKey(dateStr, idx)] ? '1' : '0';
+      lines.push([dateStr, slot.heure || '', slot.matiere || '', slot.modalite || '', txt, '', '', fait].join('\t'));
     }
   });
-  const analyseTxt = document.getElementById('analyseText').value.trim();
-  if (analyseTxt){
-    lines.push([dateStr, '', 'Analyse de pratique', '', analyseTxt, '', ''].join('\t'));
-  }
-  safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Cahier Journal" du Google Sheet');
+  // L'analyse de pratique n'est plus mélangée ici : elle part automatiquement et en
+  // direct vers l'onglet "Analyse de pratique" du Sheet (voir saveAnalyseForDate).
+  safeCopyText(lines.join('\n'), 'Copié (avec ce qui est coché "Fait") — colle dans l\'onglet "Cahier Journal" du Google Sheet');
 }
 
 // Un devoir ne peut être "à faire pour" un jour sans classe.
@@ -1902,46 +1736,70 @@ function adjustToSchoolDay(dateStr, direction){
 }
 
 // ---------- Devoirs ----------
-function renderDevoirs(dateStr, direction){
-  dateStr = adjustToSchoolDay(dateStr, direction);
-  // "dateStr" = date à faire pour (le lendemain d'une séance)
-  document.getElementById('hwDate').value = dateStr;
-  document.getElementById('hwDayLabel').textContent = 'Devoirs pour le ' + dayLabelFr(dateStr);
+function renderDevoirs(mondayStr){
+  const fridayStr = addDays(mondayStr, 4);
+  const labelEl = document.getElementById('hwWeekLabel');
+  labelEl.textContent = `Semaine du ${dayLabelFr(mondayStr)} au ${dayLabelFr(fridayStr)}`;
+  labelEl.dataset.monday = mondayStr;
   const container = document.getElementById('hwContent');
   container.innerHTML = '';
 
-  const sessionDateStr = adjustToSchoolDay(addDays(dateStr, -1), -1); // dernier jour d'école précédent
-  const items = devoirsForSession(sessionDateStr);
+  // Devoirs dus chaque jour de classe (donnés la veille du dernier jour d'école)
+  const dueDates = [0,1,3,4].map(off => addDays(mondayStr, off));
 
-  if (items.length === 0){
-    const note = document.createElement('div');
-    note.className = 'empty-note';
-    note.textContent = "Aucun devoir détecté automatiquement pour cette date (pas de séance lecture/maths trouvée la veille).";
-    container.appendChild(note);
-  } else {
-    items.forEach(it => {
-      const div = document.createElement('div');
-      div.className = 'homework-item';
-      const h4 = document.createElement('h4');
-      h4.textContent = it.subject;
-      const p = document.createElement('p');
-      p.textContent = it.text;
-      div.appendChild(h4); div.appendChild(p);
-      container.appendChild(div);
-    });
-  }
+  dueDates.forEach(dueDateStr => {
+    const sessionDateStr = adjustToSchoolDay(addDays(dueDateStr, -1), -1);
+    const items = devoirsForSession(sessionDateStr, dueDateStr);
+
+    const block = document.createElement('div');
+    block.className = 'apc-domain';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Devoirs pour le ' + dayLabelFr(dueDateStr);
+    block.appendChild(h3);
+
+    if (items.length === 0){
+      const note = document.createElement('div');
+      note.className = 'empty-note';
+      note.style.margin = '10px 16px';
+      note.textContent = "Aucun devoir détecté automatiquement pour cette date.";
+      block.appendChild(note);
+    } else {
+      items.forEach(it => {
+        const div = document.createElement('div');
+        div.className = 'homework-item';
+        const h4 = document.createElement('h4');
+        h4.textContent = it.subject;
+        const p = document.createElement('p');
+        p.textContent = it.text;
+        div.appendChild(h4); div.appendChild(p);
+        block.appendChild(div);
+      });
+    }
+    container.appendChild(block);
+  });
 }
 
 // Look through the previous day's actual schedule (via Emploi du temps template)
-// and build homework items for Lecture (page du manuel) and Maths (flashcards).
-function devoirsForSession(sessionDateStr){
+// and build homework items for Lecture, Maths, Dictée and Problèmes.
+function devoirsForSession(sessionDateStr, dueDateStr){
   const wd = weekdayNameFr(sessionDateStr);
   const slots = getEffectiveSlots(wd) || [];
   const items = [];
+  const dueWd = dueDateStr ? weekdayNameFr(dueDateStr) : null;
   slots.forEach(slot => {
     const colorName = MODALITE_TO_COLORNAME[slot.modalite];
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
     if (!colorName || !subjectKey) return;
+
+    // Devoir du week-end (dû le lundi) pour Problèmes : un problème de la semaine
+    // précédente plutôt que celui de vendredi, pour laisser le temps de le refaire.
+    if (subjectKey === 'Problèmes' && dueWd === 'lundi'){
+      const priorDate = addDays(sessionDateStr, -7);
+      const found = getActiveEntries('Problèmes', priorDate).find(e => e.modality === colorName);
+      if (found) items.push({ subject: 'Problèmes', text: `Refaire : ${found.title}` });
+      return;
+    }
+
     const found = getEntryForModality(subjectKey, sessionDateStr, colorName);
     if (!found) return;
     if (subjectKey === 'Lecture' && found.extra){
@@ -1956,6 +1814,10 @@ function devoirsForSession(sessionDateStr){
       } else if (found.modality === 'Entraînement'){
         items.push({ subject: 'Maths', text: `Flashcard n°2 — ${found.title}` });
       }
+    } else if (subjectKey === 'Dictée' && found.modality === 'Modelage'){
+      items.push({ subject: 'Dictée', text: `Revoir : ${found.title}` });
+    } else if (subjectKey === 'Problèmes'){
+      items.push({ subject: 'Problèmes', text: `Refaire : ${found.title}` });
     }
   });
   return items;
@@ -1987,6 +1849,30 @@ function upsertEvalRecord(rec){
   );
 }
 
+// Convertit une date qui aurait été "corrompue" en vraie cellule Date par Google Sheets
+// (relue sous une forme comme "mardi 15 septembre" au lieu de "2026-09-15") vers le
+// format ISO utilisé partout dans l'app, pour éviter les doublons. Repose sur l'année
+// scolaire 2026-2027 pour deviner l'année manquante.
+const FRENCH_MONTHS = {
+  janvier:0, février:1, fevrier:1, mars:2, avril:3, mai:4, juin:5, juillet:6,
+  août:7, aout:7, septembre:8, octobre:9, novembre:10, décembre:11, decembre:11
+};
+function normalizeDateStr(v){
+  if (!v) return v;
+  v = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+  const m = v.toLowerCase().match(/(\d{1,2})\s+([a-zéû]+)\s*(\d{4})?/i);
+  if (m){
+    const day = parseInt(m[1], 10);
+    const month = FRENCH_MONTHS[m[2]];
+    if (month !== undefined){
+      const year = m[3] ? parseInt(m[3], 10) : (month >= 7 ? 2026 : 2027);
+      return fmtDate(new Date(Date.UTC(year, month, day)));
+    }
+  }
+  return v; // format non reconnu : on garde tel quel plutôt que de perdre la donnée
+}
+
 // Récupère les évaluations déjà présentes dans le Google Sheet (faites depuis un autre
 // appareil) et les fusionne avec le stockage local de cet appareil.
 async function syncEvalFromSheet(){
@@ -1997,7 +1883,8 @@ async function syncEvalFromSheet(){
   const known = new Map(store.map(r => [key(r), r]));
   let changed = false;
   rows.slice(1).forEach(r => {
-    const [date, discipline, domaine, titre, eleve, score] = r;
+    const [dateRaw, discipline, domaine, titre, eleve, score] = r;
+    const date = normalizeDateStr(dateRaw);
     if (!date || !discipline || !titre || !eleve) return;
     const rec = { date, discipline, domaine: domaine || '', titre, eleve, score: score || '0' };
     const k = key(rec);
@@ -2036,16 +1923,20 @@ function getExactColoredEntries(subjectKey, targetDateStr, colorHex){
 
 function renderLecons(mondayStr){
   const fridayStr = addDays(mondayStr, 4);
+  const prevWednesdayStr = addDays(mondayStr, -5);
   const labelEl = document.getElementById('leconsWeekLabel');
-  labelEl.textContent = `Semaine du ${dayLabelFr(mondayStr)} au ${dayLabelFr(fridayStr)}`;
+  labelEl.textContent = `À partir du ${dayLabelFr(prevWednesdayStr)} — semaine du ${dayLabelFr(mondayStr)} au ${dayLabelFr(fridayStr)}`;
   labelEl.dataset.monday = mondayStr;
   const container = document.getElementById('leconsContent');
   container.innerHTML = '';
 
   let anyFound = false;
 
-  LECON_WEEKDAYS.forEach((wd, i) => {
-    const dateStr = addDays(mondayStr, [0,1,3,4][i]);
+  // Le mercredi précédent est inclus en premier : c'est le jour où les leçons de la
+  // semaine à venir sont souvent préparées/annoncées à l'avance.
+  const daysToShow = [prevWednesdayStr, ...LECON_WEEKDAYS.map((wd, i) => addDays(mondayStr, [0,1,3,4][i]))];
+
+  daysToShow.forEach(dateStr => {
     const dayEntries = [];
     Object.keys(SUBJECT_DATA).forEach(subjectKey => {
       getExactColoredEntries(subjectKey, dateStr, LECON_COLOR_HEX).forEach(entry => {
@@ -2230,28 +2121,34 @@ function saveSelectedSkills(set){
 }
 
 function renderMissionsSkillPicker(){
-  const sel = document.getElementById('missionsSkillSelect');
-  if (sel.options.length > 0) return; // déjà peuplé
+  const container = document.getElementById('missionsSkillPicker');
+  if (container.childElementCount > 0) return; // déjà peuplé
   const selected = loadSelectedSkills();
-  let currentGroup = null;
+  let currentCat = null;
   MISSIONS_SKILLS.forEach(skill => {
-    if (skill.cat !== currentGroup){
-      currentGroup = skill.cat;
-      const og = document.createElement('optgroup');
-      og.label = currentGroup;
-      og.dataset.cat = currentGroup;
-      sel.appendChild(og);
+    if (skill.cat !== currentCat){
+      currentCat = skill.cat;
+      const catLabel = document.createElement('div');
+      catLabel.className = 'skill-picker-cat';
+      catLabel.textContent = currentCat;
+      container.appendChild(catLabel);
     }
-    const opt = document.createElement('option');
-    opt.value = skill.label;
-    opt.textContent = skill.label;
-    opt.selected = selected.has(skill.label);
-    sel.lastChild.appendChild(opt);
-  });
-  sel.addEventListener('change', () => {
-    const chosen = new Set(Array.from(sel.selectedOptions).map(o => o.value));
-    saveSelectedSkills(chosen);
-    renderMissions();
+    const item = document.createElement('label');
+    item.className = 'skill-picker-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selected.has(skill.label);
+    cb.addEventListener('change', () => {
+      const sel = loadSelectedSkills();
+      if (cb.checked) sel.add(skill.label); else sel.delete(skill.label);
+      saveSelectedSkills(sel);
+      renderMissions();
+    });
+    item.appendChild(cb);
+    const txt = document.createElement('span');
+    txt.textContent = skill.label;
+    item.appendChild(txt);
+    container.appendChild(item);
   });
 }
 
@@ -2329,136 +2226,133 @@ function renderEvaluations(dateStr){
   const container = document.getElementById('evalContent');
   container.innerHTML = '';
 
-  let anyFound = false;
-  let idx = 0;
-
+  // Liste des colonnes à afficher : une par évaluation active ce jour-là. Pour la
+  // Lecture, chaque évaluation est dédoublée (orale / écrite), suivies séparément.
+  const columns = [];
   EVAL_SUBJECTS.forEach(subjectKey => {
     const entries = getEvaluationsForDate(subjectKey, dateStr);
     entries.forEach(found => {
-      anyFound = true;
-      idx++;
-
-      const card = document.createElement('div');
-      card.className = 'eval-card';
-      card.dataset.evalIdx = idx;
-      card.dataset.discipline = subjectKey;
-      card.dataset.domaine = found.domain || '';
       let displayTitle = found.title;
       if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
-      card.dataset.titre = displayTitle;
-
-      const h3 = document.createElement('h3');
-      h3.textContent = `${subjectKey} — ${displayTitle}`;
-      card.appendChild(h3);
-
-      if (found.domain){
-        const meta = document.createElement('div');
-        meta.className = 'eval-meta';
-        meta.textContent = found.domain;
-        card.appendChild(meta);
+      if (subjectKey === 'Lecture'){
+        columns.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (orale)` });
+        columns.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (écrite)` });
+      } else {
+        columns.push({ subjectKey, domaine: found.domain || '', titre: displayTitle });
       }
-
-      // Ligne "Tous" : applique le même +1/-1 à toute la classe d'un coup
-      const allRow = document.createElement('div');
-      allRow.className = 'student-row eval-all-row';
-      const allLabel = document.createElement('span');
-      allLabel.textContent = 'Tous les élèves';
-      allLabel.style.fontWeight = '600';
-      allRow.appendChild(allLabel);
-      const allControls = document.createElement('div');
-      allControls.className = 'score-controls';
-      const allMinus = document.createElement('button');
-      allMinus.className = 'score-btn';
-      allMinus.textContent = '−';
-      const allPlus = document.createElement('button');
-      allPlus.className = 'score-btn';
-      allPlus.textContent = '+';
-      allControls.appendChild(allMinus);
-      allControls.appendChild(allPlus);
-      allRow.appendChild(allControls);
-      card.appendChild(allRow);
-
-      STUDENTS.forEach(name => {
-        const row = document.createElement('div');
-        row.className = 'student-row';
-        const span = document.createElement('span');
-        span.textContent = name;
-        row.appendChild(span);
-
-        const existing = loadEvalStore().find(r =>
-          r.date === dateStr && r.discipline === subjectKey && r.titre === displayTitle && r.eleve === name
-        );
-        const initialScore = existing ? parseInt(existing.score, 10) || 0 : 0;
-
-        const controls = document.createElement('div');
-        controls.className = 'score-controls';
-
-        const minusBtn = document.createElement('button');
-        minusBtn.className = 'score-btn';
-        minusBtn.textContent = '−';
-
-        const valueSpan = document.createElement('span');
-        valueSpan.className = 'score-value';
-        valueSpan.textContent = String(initialScore);
-        valueSpan.dataset.score = String(initialScore);
-        valueSpan.dataset.student = name;
-
-        const plusBtn = document.createElement('button');
-        plusBtn.className = 'score-btn';
-        plusBtn.textContent = '+';
-
-        function commitScore(newScore){
-          newScore = Math.max(0, newScore);
-          valueSpan.textContent = String(newScore);
-          valueSpan.dataset.score = String(newScore);
-          upsertEvalRecord({
-            date: dateStr,
-            discipline: subjectKey,
-            domaine: found.domain || '',
-            titre: displayTitle,
-            eleve: name,
-            score: String(newScore)
-          });
-        }
-        minusBtn.addEventListener('click', () => commitScore(parseInt(valueSpan.dataset.score,10) - 1));
-        plusBtn.addEventListener('click', () => commitScore(parseInt(valueSpan.dataset.score,10) + 1));
-
-        controls.appendChild(minusBtn);
-        controls.appendChild(valueSpan);
-        controls.appendChild(plusBtn);
-        row.appendChild(controls);
-        card.appendChild(row);
-      });
-
-      // Applique le +1/-1 du bouton "Tous" à chaque élève de la carte
-      function commitAll(delta){
-        card.querySelectorAll('.score-value').forEach(valueSpan => {
-          const newScore = Math.max(0, parseInt(valueSpan.dataset.score, 10) + delta);
-          valueSpan.textContent = String(newScore);
-          valueSpan.dataset.score = String(newScore);
-          upsertEvalRecord({
-            date: dateStr,
-            discipline: subjectKey,
-            domaine: found.domain || '',
-            titre: displayTitle,
-            eleve: valueSpan.dataset.student,
-            score: String(newScore)
-          });
-        });
-      }
-      allMinus.addEventListener('click', () => commitAll(-1));
-      allPlus.addEventListener('click', () => commitAll(1));
-
-      container.appendChild(card);
     });
   });
 
-  if (!anyFound){
+  if (columns.length === 0){
     const note = document.createElement('div');
     note.className = 'empty-note';
     note.textContent = "Pas d'évaluation prévue ce jour-là.";
     container.appendChild(note);
+    return;
   }
+
+  function getScore(col, eleve){
+    const rec = loadEvalStore().find(r =>
+      r.date === dateStr && r.discipline === col.subjectKey && r.titre === col.titre && r.eleve === eleve
+    );
+    return rec ? parseInt(rec.score, 10) || 0 : 0;
+  }
+  function setScore(col, eleve, newScore){
+    newScore = Math.max(0, newScore);
+    upsertEvalRecord({ date: dateStr, discipline: col.subjectKey, domaine: col.domaine, titre: col.titre, eleve, score: String(newScore) });
+    return newScore;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'missions-table';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const cornerTh = document.createElement('th');
+  cornerTh.textContent = 'Élève';
+  headRow.appendChild(cornerTh);
+  columns.forEach(col => {
+    const th = document.createElement('th');
+    th.textContent = `${col.subjectKey} — ${col.titre}`;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+
+  // Ligne "Tous" : +1/-1 sur toute la classe d'un coup, colonne par colonne
+  const allRow = document.createElement('tr');
+  const allTh = document.createElement('th');
+  allTh.textContent = 'Tous les élèves';
+  allRow.appendChild(allTh);
+  columns.forEach(col => {
+    const td = document.createElement('td');
+    const wrap = document.createElement('div');
+    wrap.className = 'missions-cell-chips';
+    const minus = document.createElement('button');
+    minus.className = 'missions-mini-chip';
+    minus.textContent = '−';
+    const plus = document.createElement('button');
+    plus.className = 'missions-mini-chip';
+    plus.textContent = '+';
+    minus.addEventListener('click', () => {
+      STUDENTS.forEach(name => setScore(col, name, getScore(col, name) - 1));
+      renderEvaluations(dateStr);
+    });
+    plus.addEventListener('click', () => {
+      STUDENTS.forEach(name => setScore(col, name, getScore(col, name) + 1));
+      renderEvaluations(dateStr);
+    });
+    wrap.appendChild(minus);
+    wrap.appendChild(plus);
+    td.appendChild(wrap);
+    allRow.appendChild(td);
+  });
+  thead.appendChild(allRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  STUDENTS.forEach(name => {
+    const tr = document.createElement('tr');
+    const nameTd = document.createElement('td');
+    nameTd.textContent = name;
+    tr.appendChild(nameTd);
+
+    columns.forEach(col => {
+      const td = document.createElement('td');
+      const wrap = document.createElement('div');
+      wrap.className = 'missions-cell-chips';
+
+      const minus = document.createElement('button');
+      minus.className = 'missions-mini-chip';
+      minus.textContent = '−';
+      minus.addEventListener('click', () => {
+        setScore(col, name, getScore(col, name) - 1);
+        renderEvaluations(dateStr);
+      });
+
+      const valSpan = document.createElement('span');
+      valSpan.textContent = getScore(col, name);
+      valSpan.style.minWidth = '18px';
+      valSpan.style.display = 'inline-block';
+
+      const plus = document.createElement('button');
+      plus.className = 'missions-mini-chip';
+      plus.textContent = '+';
+      plus.addEventListener('click', () => {
+        setScore(col, name, getScore(col, name) + 1);
+        renderEvaluations(dateStr);
+      });
+
+      wrap.appendChild(minus);
+      wrap.appendChild(valSpan);
+      wrap.appendChild(plus);
+      td.appendChild(wrap);
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
 }
 
 function shiftEvalDay(delta){
@@ -2481,16 +2375,20 @@ function copyEvaluationsToClipboard(){
   safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Évaluation" du Google Sheet');
 }
 
-function shiftHwDay(delta){
-  const cur = document.getElementById('hwDate').value;
-  renderDevoirs(addDays(cur, delta), delta >= 0 ? 1 : -1);
+function shiftHwWeek(delta){
+  const cur = document.getElementById('hwWeekLabel').dataset.monday;
+  renderDevoirs(addDays(cur, delta * 7));
 }
 
 function copyHwToClipboard(){
-  const dateStr = document.getElementById('hwDate').value;
-  const sessionDateStr = adjustToSchoolDay(addDays(dateStr, -1), -1);
-  const items = devoirsForSession(sessionDateStr);
-  const lines = items.map(it => [dateStr, it.subject, it.text].join('\t'));
+  const mondayStr = document.getElementById('hwWeekLabel').dataset.monday;
+  const dueDates = [0,1,3,4].map(off => addDays(mondayStr, off));
+  const lines = [];
+  dueDates.forEach(dueDateStr => {
+    const sessionDateStr = adjustToSchoolDay(addDays(dueDateStr, -1), -1);
+    const items = devoirsForSession(sessionDateStr, dueDateStr);
+    items.forEach(it => lines.push([dueDateStr, it.subject, it.text].join('\t')));
+  });
   safeCopyText(lines.join('\n'), 'Copié — colle dans l\'onglet "Devoirs" du Google Sheet');
 }
 
@@ -2610,13 +2508,19 @@ function renderSuivi(){
       summaryLine.style.fontWeight = '600';
       summaryLine.textContent = `⭐ ${starsEarned} étoile${starsEarned>1?'s':''} sur ${comportStore.length} jour${comportStore.length>1?'s':''}`;
       innerC.appendChild(summaryLine);
+
+      const todayStr = fmtDate(new Date());
+      const todayRec = comportStore.find(r => r.date === todayStr);
+      if (todayRec){
+        const todayLine = document.createElement('div');
+        todayLine.style.margin = '4px 0 8px';
+        todayLine.style.fontWeight = '600';
+        todayLine.textContent = `Aujourd'hui : ${dayStarEarned(todayRec.quarters) ? '⭐ étoile gagnée' : '☆ étoile perdue'}`;
+        innerC.appendChild(todayLine);
+      }
+
       comportStore.slice(0, 10).forEach(r => {
-        const line = document.createElement('div');
-        line.className = 'result-line';
-        line.style.display = 'block';
-        const star = dayStarEarned(r.quarters) ? '⭐' : '☆';
-        line.textContent = `${r.date} — ${star}`;
-        innerC.appendChild(line);
+        innerC.appendChild(buildComportHistoryRow(r, student, false));
       });
       comportBlock.appendChild(innerC);
       container.appendChild(comportBlock);
@@ -2799,291 +2703,6 @@ async function sheetSaveRow(tab, row, matchColumns){
   }
 }
 
-// ---------- Profil élève (infos & santé, actions à mettre en place, rendez-vous) ----------
-// Onglets Google Sheet nécessaires (à créer manuellement, avec cette ligne d'en-tête) :
-//   "Profil" -> Eleve | Categorie | Cle | Valeur | Note        (Categorie: Config / InfoSante)
-//   "RDV"    -> Eleve | Date | Type | Notes
-const PROFIL_STORAGE_KEY = 'cahier_de_classe_profil_v1';
-const RDV_STORAGE_KEY = 'cahier_de_classe_rdv_v1';
-const DEFAULT_SANTE_COLS = ["Retards répétés","Autorisation photo/vidéo","Sieste / repos","Port de lunettes","Contrôle auditif","Fratrie dans l'école","Alerte santé (PAI / allergie)"];
-let profilActiveSub = 'sante';
-
-function loadProfilStore(){
-  try{ return JSON.parse(localStorage.getItem(PROFIL_STORAGE_KEY) || '[]'); }
-  catch(e){ return []; }
-}
-function saveProfilStore(arr){
-  try{ localStorage.setItem(PROFIL_STORAGE_KEY, JSON.stringify(arr)); }
-  catch(e){ /* stockage indisponible */ }
-}
-function loadRdvStore(){
-  try{ return JSON.parse(localStorage.getItem(RDV_STORAGE_KEY) || '[]'); }
-  catch(e){ return []; }
-}
-function saveRdvStore(arr){
-  try{ localStorage.setItem(RDV_STORAGE_KEY, JSON.stringify(arr)); }
-  catch(e){ /* stockage indisponible */ }
-}
-
-// Fusionne les lignes déjà présentes dans le Google Sheet (faites depuis un autre appareil)
-async function syncProfilFromSheet(){
-  const rows = await sheetGetRows('Profil');
-  if (!rows || rows.length <= 1) return;
-  const local = loadProfilStore();
-  const known = new Set(local.map(p => `${p.eleve}|${p.categorie}|${p.cle}`));
-  let added = false;
-  rows.slice(1).forEach(r => {
-    const [eleve, categorie, cle, valeur, note] = r;
-    if (!categorie || !cle) return;
-    const key = `${eleve || ''}|${categorie}|${cle}`;
-    if (known.has(key)){
-      const existing = local.find(p => `${p.eleve}|${p.categorie}|${p.cle}` === key);
-      if (existing){ existing.valeur = valeur || ''; existing.note = note || ''; }
-    } else {
-      local.push({ eleve: eleve || '', categorie, cle, valeur: valeur || '', note: note || '' });
-      known.add(key);
-      added = true;
-    }
-  });
-  if (added || rows.length > 1) saveProfilStore(local);
-}
-async function syncRdvFromSheet(){
-  const rows = await sheetGetRows('RDV');
-  if (!rows || rows.length <= 1) return;
-  const local = loadRdvStore();
-  const known = new Set(local.map(r2 => `${r2.eleve}|${r2.date}|${r2.type}|${r2.notes}`));
-  let added = false;
-  rows.slice(1).forEach(r => {
-    const [eleve, date, type, notes] = r;
-    if (!eleve || !date) return;
-    const key = `${eleve}|${date}|${type || ''}|${notes || ''}`;
-    if (!known.has(key)){
-      local.push({ eleve, date, type: type || '', notes: notes || '' });
-      known.add(key);
-      added = true;
-    }
-  });
-  if (added) saveRdvStore(local);
-}
-
-function profilConfigGet(cle, fallback){
-  const store = loadProfilStore();
-  const row = store.find(p => p.categorie === 'Config' && p.cle === cle);
-  return row ? row.valeur : fallback;
-}
-function profilConfigSet(cle, valeur){
-  const store = loadProfilStore();
-  let row = store.find(p => p.categorie === 'Config' && p.cle === cle);
-  if (row){ row.valeur = valeur; } else { store.push({ eleve:'', categorie:'Config', cle, valeur, note:'' }); }
-  saveProfilStore(store);
-  sheetSaveRow('Profil', ['', 'Config', cle, valeur, ''], [1,2]);
-}
-
-function getSanteColumns(){
-  const raw = profilConfigGet('ColonnesInfoSante', '');
-  if (!raw) return DEFAULT_SANTE_COLS.slice();
-  return raw.split('|||').filter(Boolean);
-}
-function setSanteColumns(cols){
-  profilConfigSet('ColonnesInfoSante', cols.join('|||'));
-}
-
-function populateProfilSelect(){
-  const sel = document.getElementById('profilStudent');
-  sel.innerHTML = '';
-  STUDENTS.forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name; opt.textContent = name;
-    sel.appendChild(opt);
-  });
-}
-
-function switchProfilSub(sub){
-  profilActiveSub = sub;
-  document.querySelectorAll('.profil-subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.psub === sub));
-  document.getElementById('profilSanteView').style.display = sub === 'sante' ? '' : 'none';
-  document.getElementById('profilActionsView').style.display = sub === 'actions' ? '' : 'none';
-  document.getElementById('profilRdvView').style.display = sub === 'rdv' ? '' : 'none';
-}
-
-function renderProfil(){
-  const eleve = document.getElementById('profilStudent').value;
-  document.getElementById('ficheEleveTitre').textContent = eleve;
-  document.getElementById('profilClasseNom').value = profilConfigGet('NomClasse', '');
-  renderProfilSante(eleve);
-  renderProfilActions(eleve);
-  renderProfilRdv(eleve);
-}
-
-function renderProfilSante(eleve){
-  const store = loadProfilStore();
-  const cols = getSanteColumns();
-  const grid = document.getElementById('profilSanteGrid');
-  grid.innerHTML = '';
-  cols.forEach(colLabel => {
-    const rowData = store.find(p => p.eleve === eleve && p.categorie === 'InfoSante' && p.cle === colLabel);
-    const on = rowData && rowData.valeur === 'on';
-    const note = rowData ? (rowData.note || '') : '';
-    const row = document.createElement('div');
-    row.className = 'profil-toggle-row';
-    const dot = document.createElement('button');
-    dot.className = 'profil-toggle-dot' + (on ? ' on' : '');
-    dot.type = 'button';
-    dot.addEventListener('click', () => toggleSanteItem(eleve, colLabel));
-    const label = document.createElement('div');
-    label.className = 'profil-toggle-label';
-    label.textContent = colLabel;
-    const noteEl = document.createElement('div');
-    noteEl.className = 'profil-toggle-note';
-    noteEl.textContent = note || '+ note';
-    noteEl.addEventListener('click', () => editSanteNote(eleve, colLabel, note));
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'profil-remove-col';
-    removeBtn.type = 'button';
-    removeBtn.textContent = '✕';
-    removeBtn.title = 'Retirer cet élément de la grille';
-    removeBtn.addEventListener('click', () => removeSanteColumn(colLabel));
-    row.appendChild(dot); row.appendChild(label); row.appendChild(noteEl); row.appendChild(removeBtn);
-    grid.appendChild(row);
-  });
-  if (cols.length === 0){
-    grid.innerHTML = '<p class="empty-note">Aucun élément — ajoute-en un ci-dessous.</p>';
-  }
-}
-
-function toggleSanteItem(eleve, cle){
-  const store = loadProfilStore();
-  let row = store.find(p => p.eleve === eleve && p.categorie === 'InfoSante' && p.cle === cle);
-  const newVal = row && row.valeur === 'on' ? '' : 'on';
-  if (row){ row.valeur = newVal; } else { row = { eleve, categorie:'InfoSante', cle, valeur:newVal, note:'' }; store.push(row); }
-  saveProfilStore(store);
-  sheetSaveRow('Profil', [eleve, 'InfoSante', cle, newVal, row.note || ''], [0,1,2]);
-  renderProfilSante(eleve);
-}
-function editSanteNote(eleve, cle, currentNote){
-  const val = window.prompt('Note pour "' + cle + '" — ' + eleve, currentNote || '');
-  if (val === null) return;
-  const store = loadProfilStore();
-  let row = store.find(p => p.eleve === eleve && p.categorie === 'InfoSante' && p.cle === cle);
-  if (row){ row.note = val; } else { row = { eleve, categorie:'InfoSante', cle, valeur:'', note: val }; store.push(row); }
-  saveProfilStore(store);
-  sheetSaveRow('Profil', [eleve, 'InfoSante', cle, row.valeur || '', val], [0,1,2]);
-  renderProfilSante(eleve);
-}
-function removeSanteColumn(colLabel){
-  if (!window.confirm('Retirer "' + colLabel + '" de la grille pour tous les élèves ?')) return;
-  const cols = getSanteColumns().filter(c => c !== colLabel);
-  setSanteColumns(cols);
-  renderProfilSante(document.getElementById('profilStudent').value);
-}
-function addSanteColumn(){
-  const input = document.getElementById('profilNewColLabel');
-  const label = (input.value || '').trim();
-  if (!label) return;
-  const cols = getSanteColumns();
-  if (!cols.includes(label)) cols.push(label);
-  setSanteColumns(cols);
-  input.value = '';
-  renderProfilSante(document.getElementById('profilStudent').value);
-}
-
-function renderProfilActions(eleve){
-  const store = loadProfilStore();
-  const items = store.filter(p => p.eleve === eleve && p.categorie === 'Action' && p.valeur !== 'archive');
-  const list = document.getElementById('profilActionsList');
-  list.innerHTML = '';
-  if (items.length === 0){
-    list.innerHTML = '<p class="empty-note">Aucune action en cours pour ' + eleve + '.</p>';
-    return;
-  }
-  items.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'action-item';
-    const txt = document.createElement('div');
-    txt.className = 'action-item-text';
-    txt.textContent = item.note || '';
-    const del = document.createElement('button');
-    del.className = 'action-del-btn';
-    del.textContent = 'Terminée';
-    del.addEventListener('click', () => archiveAction(eleve, item.cle));
-    div.appendChild(txt); div.appendChild(del);
-    list.appendChild(div);
-  });
-}
-function addProfilAction(){
-  const eleve = document.getElementById('profilStudent').value;
-  const textarea = document.getElementById('profilNewAction');
-  const texte = (textarea.value || '').trim();
-  if (!texte) return;
-  const cle = 'a' + Date.now();
-  const row = { eleve, categorie:'Action', cle, valeur:'active', note: texte };
-  const store = loadProfilStore();
-  store.push(row);
-  saveProfilStore(store);
-  sheetSaveRow('Profil', [eleve, 'Action', cle, 'active', texte], [0,1,2]);
-  textarea.value = '';
-  renderProfilActions(eleve);
-}
-function archiveAction(eleve, cle){
-  const store = loadProfilStore();
-  const row = store.find(p => p.eleve === eleve && p.categorie === 'Action' && p.cle === cle);
-  if (row){
-    row.valeur = 'archive';
-    saveProfilStore(store);
-    sheetSaveRow('Profil', [eleve, 'Action', cle, 'archive', row.note || ''], [0,1,2]);
-  }
-  renderProfilActions(eleve);
-}
-
-function renderProfilRdv(eleve){
-  const items = loadRdvStore().filter(r => r.eleve === eleve).sort((a,b) => a.date < b.date ? 1 : -1);
-  const list = document.getElementById('profilRdvList');
-  list.innerHTML = '';
-  if (items.length === 0){
-    list.innerHTML = '<p class="empty-note">Aucun rendez-vous enregistré pour ' + eleve + '.</p>';
-    return;
-  }
-  items.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'rdv-item';
-    const wrap = document.createElement('div');
-    wrap.className = 'rdv-item-text';
-    const meta = document.createElement('div');
-    meta.className = 'rdv-item-meta';
-    meta.textContent = (item.date || '') + (item.type ? ' — ' + item.type : '');
-    const notes = document.createElement('div');
-    notes.textContent = item.notes || '';
-    wrap.appendChild(meta); wrap.appendChild(notes);
-    div.appendChild(wrap);
-    list.appendChild(div);
-  });
-}
-function addProfilRdv(){
-  const eleve = document.getElementById('profilStudent').value;
-  const date = document.getElementById('profilRdvDate').value;
-  const type = document.getElementById('profilRdvType').value.trim();
-  const notes = document.getElementById('profilRdvNotes').value.trim();
-  if (!date){ showToast('⚠️ Choisis une date'); return; }
-  const row = { eleve, date, type, notes };
-  const store = loadRdvStore();
-  store.push(row);
-  saveRdvStore(store);
-  sheetSaveRow('RDV', [eleve, date, type, notes]);
-  document.getElementById('profilRdvType').value = '';
-  document.getElementById('profilRdvNotes').value = '';
-  renderProfilRdv(eleve);
-}
-
-function saveProfilClasseNom(){
-  const val = document.getElementById('profilClasseNom').value.trim();
-  profilConfigSet('NomClasse', val);
-  showToast('Nom de la classe enregistré');
-}
-
-function printFicheEleve(){
-  window.print();
-}
-
 // ---------- Observations ----------
 const OBS_STORAGE_KEY = 'cahier_de_classe_obs_v1';
 
@@ -3112,7 +2731,8 @@ async function syncObsFromSheet(){
   const known = new Set(local.map(o => `${o.date}|${o.eleve}|${o.texte}`));
   let added = false;
   rows.slice(1).forEach(r => {
-    const [date, eleve, texte] = r;
+    const [dateRaw, eleve, texte] = r;
+    const date = normalizeDateStr(dateRaw);
     if (!date || !eleve) return;
     const key = `${date}|${eleve}|${texte || ''}`;
     if (!known.has(key)){
@@ -3540,6 +3160,7 @@ function renderApc(){
   const container = document.getElementById('apcContent');
   container.innerHTML = '';
   const store = loadEvalStore();
+  const doneSet = loadApcDone();
 
   if (store.length === 0){
     const note = document.createElement('div');
@@ -3569,7 +3190,8 @@ function renderApc(){
         .sort((a, b) => a.eleve.localeCompare(b.eleve));
       flagged.forEach(e => domainRows.push({ eleve: e.eleve, titre }));
     });
-    if (domainRows.length === 0) return;
+    const visibleRows = domainRows.filter(({ eleve, titre }) => !doneSet.has(apcActionKey(dom, titre, eleve)));
+    if (visibleRows.length === 0) return;
     anyFlag = true;
 
     const block = document.createElement('div');
@@ -3578,7 +3200,7 @@ function renderApc(){
     h3.textContent = dom;
     block.appendChild(h3);
 
-    domainRows.forEach(({ eleve, titre }) => {
+    visibleRows.forEach(({ eleve, titre }) => {
       const row = document.createElement('div');
       row.className = 'apc-student';
       const span = document.createElement('span');
@@ -3588,6 +3210,18 @@ function renderApc(){
       note.className = 'apc-note';
       note.textContent = titre;
       row.appendChild(note);
+
+      const doneBtn = document.createElement('button');
+      doneBtn.textContent = '✓ Terminé';
+      doneBtn.className = 'apc-done-btn';
+      doneBtn.addEventListener('click', () => {
+        const s = loadApcDone();
+        s.add(apcActionKey(dom, titre, eleve));
+        saveApcDone(s);
+        renderApc();
+      });
+      row.appendChild(doneBtn);
+
       block.appendChild(row);
     });
 
@@ -3597,9 +3231,20 @@ function renderApc(){
   if (!anyFlag){
     const note = document.createElement('div');
     note.className = 'empty-note';
-    note.textContent = "Aucune difficulté détectée pour l'instant — chaque élève a au moins une validation sur chaque évaluation.";
+    note.textContent = "Aucune difficulté détectée pour l'instant — chaque élève a au moins une validation sur chaque évaluation (ou toutes les actions ont été marquées terminées).";
     container.appendChild(note);
   }
+}
+
+const APC_DONE_KEY = 'cahier_de_classe_apc_done_v1';
+function apcActionKey(dom, titre, eleve){ return `${dom}|${titre}|${eleve}`; }
+function loadApcDone(){
+  try{ return new Set(JSON.parse(localStorage.getItem(APC_DONE_KEY) || '[]')); }
+  catch(e){ return new Set(); }
+}
+function saveApcDone(set){
+  try{ localStorage.setItem(APC_DONE_KEY, JSON.stringify(Array.from(set))); }
+  catch(e){ /* stockage indisponible */ }
 }
 
 // ---------- Toast ----------
@@ -3622,7 +3267,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       refreshProgressionData().then(ok => { if (ok) renderJournal(document.getElementById('journalDate').value); });
     }
     if (btn.dataset.tab === 'devoirs'){
-      refreshProgressionData().then(ok => { if (ok) renderDevoirs(document.getElementById('hwDate').value); });
+      refreshProgressionData().then(ok => { if (ok) renderDevoirs(document.getElementById('hwWeekLabel').dataset.monday); });
     }
     if (btn.dataset.tab === 'evaluations'){
       syncEvalFromSheet().then(() => renderEvaluations(document.getElementById('evalDate').value));
@@ -3730,7 +3375,8 @@ async function syncComportFromSheet(){
   const known = new Map(store.map(r => [key(r), r]));
   let changed = false;
   rows.slice(1).forEach(r => {
-    const [date, eleve, q1, q2, q3, q4] = r;
+    const [dateRaw, eleve, q1, q2, q3, q4] = r;
+    const date = normalizeDateStr(dateRaw);
     if (!date || !eleve) return;
     const rec = { date, eleve, quarters: [q1, q2, q3, q4].map(v => parseInt(v, 10) || 0) };
     const k = key(rec);
@@ -3845,7 +3491,7 @@ function renderComportJour(dateStr){
 
 function shiftComportDay(delta){
   const cur = document.getElementById('comportDate').value;
-  const next = addDays(cur, delta);
+  const next = adjustToSchoolDay(addDays(cur, delta), delta >= 0 ? 1 : -1);
   renderComportJour(next);
   ensureAllStudentsForDate(next);
 }
@@ -3880,6 +3526,42 @@ function getAllSchoolDaysUpTo(endDateStr){
     guard++;
   }
   return days;
+}
+
+// Construit une ligne d'historique (date + points colorés par quart + étoile), pour un
+// jour donné. editable=true permet de cliquer les points pour les faire avancer.
+function buildComportHistoryRow(r, student, editable, onChange){
+  const row = document.createElement('div');
+  row.className = 'comport-history-row';
+
+  const dateEl = document.createElement('span');
+  dateEl.className = 'comport-history-date';
+  dateEl.textContent = r.date;
+  row.appendChild(dateEl);
+
+  const quarters = r.quarters.slice();
+  quarters.forEach((val, qi) => {
+    const dot = document.createElement('span');
+    dot.className = 'comport-legend-dot' + (editable ? ' comport-legend-dot-editable' : '');
+    const state = RAPPEL_STATES[val] || RAPPEL_STATES[0];
+    dot.style.background = state.bg;
+    dot.style.borderColor = state.border;
+    dot.title = `${COMPORT_QUARTERS[qi]} — ${RAPPEL_TITLES[val]}`;
+    if (editable){
+      dot.addEventListener('click', () => {
+        quarters[qi] = (quarters[qi] + 1) % RAPPEL_STATES.length;
+        upsertComportRecord({ date: r.date, eleve: student, quarters });
+        if (onChange) onChange();
+      });
+    }
+    row.appendChild(dot);
+  });
+
+  const star = document.createElement('span');
+  star.textContent = dayStarEarned(quarters) ? '⭐' : '☆';
+  row.appendChild(star);
+
+  return row;
 }
 
 function renderComportEleve(){
@@ -3957,35 +3639,7 @@ function renderComportEleve(){
   }
 
   store.forEach(r => {
-    const row = document.createElement('div');
-    row.className = 'comport-history-row';
-
-    const dateEl = document.createElement('span');
-    dateEl.className = 'comport-history-date';
-    dateEl.textContent = r.date;
-    row.appendChild(dateEl);
-
-    const quarters = r.quarters.slice();
-    quarters.forEach((val, qi) => {
-      const dot = document.createElement('span');
-      dot.className = 'comport-legend-dot comport-legend-dot-editable';
-      const state = RAPPEL_STATES[val] || RAPPEL_STATES[0];
-      dot.style.background = state.bg;
-      dot.style.borderColor = state.border;
-      dot.title = `${COMPORT_QUARTERS[qi]} — ${RAPPEL_TITLES[val]}`;
-      dot.addEventListener('click', () => {
-        quarters[qi] = (quarters[qi] + 1) % RAPPEL_STATES.length;
-        upsertComportRecord({ date: r.date, eleve: student, quarters });
-        renderComportEleve();
-      });
-      row.appendChild(dot);
-    });
-
-    const star = document.createElement('span');
-    star.textContent = dayStarEarned(quarters) ? '⭐' : '☆';
-    row.appendChild(star);
-
-    container.appendChild(row);
+    container.appendChild(buildComportHistoryRow(r, student, true, renderComportEleve));
   });
 }
 
@@ -4017,7 +3671,7 @@ async function refreshProgressionData(){
 
 function rerenderAfterProgressionRefresh(){
   renderJournal(document.getElementById('journalDate').value);
-  renderDevoirs(document.getElementById('hwDate').value);
+  renderDevoirs(document.getElementById('hwWeekLabel').dataset.monday);
   renderEvaluations(document.getElementById('evalDate').value);
 }
 
@@ -4031,7 +3685,8 @@ function rerenderAfterProgressionRefresh(){
   const defaultDate = (todayStr >= allDates[0] && todayStr <= allDates[allDates.length-1]) ? todayStr : allDates[0];
 
   renderJournal(defaultDate);
-  renderDevoirs(addDays(defaultDate, 1));
+  document.getElementById('hwWeekLabel').dataset.monday = getMondayOfWeek(defaultDate);
+  renderDevoirs(getMondayOfWeek(defaultDate));
   refreshProgressionData().then(ok => { if (ok) rerenderAfterProgressionRefresh(); });
 
   document.getElementById('journalDate').addEventListener('change', e => renderJournal(e.target.value));
@@ -4039,9 +3694,8 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('nextDay').addEventListener('click', ()=>shiftJournalDay(1));
   document.getElementById('copyJournal').addEventListener('click', copyJournalToClipboard);
 
-  document.getElementById('hwDate').addEventListener('change', e => renderDevoirs(e.target.value));
-  document.getElementById('prevDayHw').addEventListener('click', ()=>shiftHwDay(-1));
-  document.getElementById('nextDayHw').addEventListener('click', ()=>shiftHwDay(1));
+  document.getElementById('prevWeekHw').addEventListener('click', ()=>shiftHwWeek(-1));
+  document.getElementById('nextWeekHw').addEventListener('click', ()=>shiftHwWeek(1));
   document.getElementById('copyHw').addEventListener('click', copyHwToClipboard);
 
   renderEvaluations(defaultDate);
@@ -4072,27 +3726,17 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('leconsWeekLabel').dataset.monday = getMondayOfWeek(defaultDate);
   document.getElementById('prevWeekLecons').addEventListener('click', () => shiftLeconsWeek(-1));
   document.getElementById('nextWeekLecons').addEventListener('click', () => shiftLeconsWeek(1));
-  document.getElementById('comportDate').addEventListener('change', e => { renderComportJour(e.target.value); ensureAllStudentsForDate(e.target.value); });
+  document.getElementById('comportDate').addEventListener('change', e => {
+    const d = adjustToSchoolDay(e.target.value, 1);
+    renderComportJour(d);
+    ensureAllStudentsForDate(d);
+  });
   document.getElementById('prevDayComport').addEventListener('click', ()=>shiftComportDay(-1));
   document.getElementById('nextDayComport').addEventListener('click', ()=>shiftComportDay(1));
   document.querySelectorAll('.comport-subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => switchComportSubtab(btn.dataset.sub));
   });
   document.getElementById('comportStudent').addEventListener('change', renderComportEleve);
-
-  populateProfilSelect();
-  syncProfilFromSheet().then(() => renderProfil());
-  syncRdvFromSheet().then(() => renderProfilRdv(document.getElementById('profilStudent').value));
-  renderProfil();
-  document.getElementById('profilStudent').addEventListener('change', renderProfil);
-  document.getElementById('saveProfilClasseNom').addEventListener('click', saveProfilClasseNom);
-  document.getElementById('printFiche').addEventListener('click', printFicheEleve);
-  document.getElementById('profilAddCol').addEventListener('click', addSanteColumn);
-  document.getElementById('profilAddAction').addEventListener('click', addProfilAction);
-  document.getElementById('profilAddRdv').addEventListener('click', addProfilRdv);
-  document.querySelectorAll('.profil-subtab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchProfilSub(btn.dataset.psub));
-  });
  } catch(err){
   const main = document.querySelector('main');
   if (main){
