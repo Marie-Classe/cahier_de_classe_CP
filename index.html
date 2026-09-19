@@ -295,7 +295,8 @@
   }
   .skill-picker-item input{ flex-shrink: 0; width:16px; height:16px; }
   .missions-table{
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     width: 100%;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.8rem;
@@ -937,7 +938,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 07h05 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-19 07h20 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1007,10 +1008,13 @@
     <div class="analyse-card">
       <h3>📝 Analyse de pratique</h3>
       <textarea id="analyseText" placeholder="Ce qui a bien fonctionné, ce qui a coincé, ce que je change pour demain…"></textarea>
+      <div class="actions" style="margin-top:10px;">
+        <button id="copyAnalyse" style="font-family:-apple-system,sans-serif;font-size:0.82rem;background:white;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;">📤 Exporter l'analyse de pratique</button>
+      </div>
     </div>
 
     <div class="actions">
-      <button class="primary" id="copyJournal">Copier pour coller dans le Google Sheet</button>
+      <button class="primary" id="copyJournal">📤 Exporter le Cahier journal du jour</button>
     </div>
   </section>
 
@@ -1702,6 +1706,13 @@ function buildHyperlinkFormula(url, label){
   const safeUrl = String(url).replace(/"/g, '""');
   const safeLabel = String(label).replace(/"/g, '""');
   return `=LIEN_HYPERTEXTE("${safeUrl}";"${safeLabel}")`;
+}
+
+function copyAnalyseToClipboard(){
+  const dateStr = document.getElementById('journalDate').value;
+  const texte = document.getElementById('analyseText').value.trim();
+  if (!texte){ showToast("Rien à exporter : l'analyse de pratique est vide."); return; }
+  safeCopyText([dateStr, texte].join('\t'), 'Copié — colle dans l\'onglet "Analyse de pratique" du Google Sheet');
 }
 
 function copyJournalToClipboard(){
@@ -3707,6 +3718,7 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('prevDay').addEventListener('click', ()=>shiftJournalDay(-1));
   document.getElementById('nextDay').addEventListener('click', ()=>shiftJournalDay(1));
   document.getElementById('copyJournal').addEventListener('click', copyJournalToClipboard);
+  document.getElementById('copyAnalyse').addEventListener('click', copyAnalyseToClipboard);
 
   document.getElementById('prevWeekHw').addEventListener('click', ()=>shiftHwWeek(-1));
   document.getElementById('nextWeekHw').addEventListener('click', ()=>shiftHwWeek(1));
