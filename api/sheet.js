@@ -19,6 +19,14 @@ function sheetIdPreview(id){
   return `"${id.slice(0,6)}...${id.slice(-4)}" (${id.length} caractères)`;
 }
 
+// Seul l'onglet "Cahier-journal" a besoin de formules (=LIEN_HYPERTEXTE sur les titres).
+// Partout ailleurs, on force l'écriture en texte brut (RAW) pour empêcher Google Sheets
+// de "deviner" et convertir nos dates ("2026-09-15") en vraies cellules Date, ce qui
+// provoquait des doublons (la même date relue sous deux formats différents).
+function inputOptionFor(tab){
+  return tab === 'Cahier-journal' ? 'USER_ENTERED' : 'RAW';
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -47,6 +55,7 @@ module.exports = async (req, res) => {
 
     if (req.method === 'POST'){
       const { tab, row, rows, matchColumns } = req.body || {};
+      const inputOption = inputOptionFor(tab);
 
       // Mode lot : plusieurs lignes à ajouter d'un coup, sans lecture préalable
       // (utilisé quand on sait déjà côté app qu'elles sont absentes — évite de multiplier
@@ -56,7 +65,7 @@ module.exports = async (req, res) => {
         await sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
           range: `${tab}!A:Z`,
-          valueInputOption: 'USER_ENTERED',
+          valueInputOption: inputOption,
           insertDataOption: 'INSERT_ROWS',
           requestBody: { values: rows }
         });
@@ -86,7 +95,7 @@ module.exports = async (req, res) => {
           await sheets.spreadsheets.values.update({
             spreadsheetId: sheetId,
             range: `${tab}!A${sheetRowNumber}:Z${sheetRowNumber}`,
-            valueInputOption: 'USER_ENTERED',
+            valueInputOption: inputOption,
             requestBody: { values: [row] }
           });
           res.status(200).json({ ok: true, updated: true });
@@ -97,7 +106,7 @@ module.exports = async (req, res) => {
       await sheets.spreadsheets.values.append({
         spreadsheetId: sheetId,
         range: `${tab}!A:Z`,
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: inputOption,
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: [row] }
       });
