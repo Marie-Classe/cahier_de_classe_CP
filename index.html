@@ -120,6 +120,21 @@
     margin-bottom: 18px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
+  .eval-mode-btn{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+    padding: 10px;
+    border: 1px solid var(--line);
+    background: white;
+    color: var(--ink);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .eval-mode-btn.eval-mode-active{
+    background: var(--ink);
+    color: white;
+    border-color: var(--ink);
+  }
   .datebar input[type=date]{
     font-family: inherit;
     padding: 8px 10px;
@@ -954,7 +969,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-21 16h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-21 17h30 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1080,16 +1095,32 @@
 
   <!-- EVALUATIONS -->
   <section id="evaluations" class="panel">
-    <div class="datebar">
-      <button class="navbtn" id="prevDayEval">←</button>
-      <input type="date" id="evalDate">
-      <button class="navbtn" id="nextDayEval">→</button>
+    <div class="datebar" style="gap:8px;">
+      <button id="evalModeDate" class="eval-mode-btn eval-mode-active" style="flex:1;">Par date</button>
+      <button id="evalModeDomaine" class="eval-mode-btn" style="flex:1;">Par domaine (livret)</button>
     </div>
-    <div class="day-label" id="evalDayLabel"></div>
-    <br>
-    <div id="evalContent"></div>
-    <div class="actions">
-      <button class="primary" id="copyEval">Copier pour coller dans le Google Sheet</button>
+
+    <div id="evalDateMode">
+      <div class="datebar">
+        <button class="navbtn" id="prevDayEval">←</button>
+        <input type="date" id="evalDate">
+        <button class="navbtn" id="nextDayEval">→</button>
+      </div>
+      <div class="day-label" id="evalDayLabel"></div>
+      <br>
+      <div id="evalContent"></div>
+      <div class="actions">
+        <button class="primary" id="copyEval">Copier pour coller dans le Google Sheet</button>
+      </div>
+    </div>
+
+    <div id="evalDomaineMode" style="display:none;">
+      <p class="empty-note" style="margin-bottom:10px;">Choisis une matière puis un domaine du livret de réussites : toutes ses notions apparaissent en colonnes, peu importe la date.</p>
+      <div class="datebar" style="gap:8px;">
+        <select id="evalDomaineSubject" class="suivi-select" style="flex:1;"></select>
+        <select id="evalDomaineDomaine" class="suivi-select" style="flex:1;"></select>
+      </div>
+      <div id="evalDomaineContent" style="overflow-x:auto; margin-top:10px;"></div>
     </div>
   </section>
 
@@ -2316,20 +2347,28 @@ function renderEvaluations(dateStr){
   container.innerHTML = '';
 
   // Liste des colonnes à afficher : une par évaluation active ce jour-là. Pour la
-  // Lecture, chaque évaluation est dédoublée (orale / écrite), suivies séparément.
+  // Lecture, toutes les évaluations écrites sont groupées ensemble, puis toutes les
+  // orales ensemble (plutôt que d'alterner écrite/orale par titre).
   const columns = [];
   EVAL_SUBJECTS.forEach(subjectKey => {
     const entries = getEvaluationsForDate(subjectKey, dateStr);
-    entries.forEach(found => {
-      let displayTitle = found.title;
-      if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
-      if (subjectKey === 'Lecture'){
-        columns.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (écrite)` });
-        columns.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (orale)` });
-      } else {
+    if (subjectKey === 'Lecture'){
+      const ecriteCols = [];
+      const oraleCols = [];
+      entries.forEach(found => {
+        let displayTitle = found.title;
+        if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
+        ecriteCols.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (écrite)` });
+        oraleCols.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (orale)` });
+      });
+      columns.push(...ecriteCols, ...oraleCols);
+    } else {
+      entries.forEach(found => {
+        let displayTitle = found.title;
+        if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
         columns.push({ subjectKey, domaine: found.domain || '', titre: displayTitle });
-      }
-    });
+      });
+    }
   });
 
   if (columns.length === 0){
@@ -2444,6 +2483,134 @@ function renderEvaluations(dateStr){
   });
   table.appendChild(tbody);
   container.appendChild(table);
+}
+
+// ---------- Évaluations par domaine (livret de réussites, indépendant de la date) ----------
+function renderEvalDomaineSubjectPicker(){
+  const sel = document.getElementById('evalDomaineSubject');
+  if (sel.options.length > 0) return; // déjà peuplé
+  Object.keys(SUBJECT_DATA).sort().forEach(subj => {
+    const opt = document.createElement('option');
+    opt.value = subj; opt.textContent = subj;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => { populateEvalDomaineOptions(); renderEvalDomaine(); });
+  document.getElementById('evalDomaineDomaine').addEventListener('change', renderEvalDomaine);
+  populateEvalDomaineOptions();
+}
+
+function populateEvalDomaineOptions(){
+  const subj = document.getElementById('evalDomaineSubject').value;
+  const domSel = document.getElementById('evalDomaineDomaine');
+  const sheet = SUBJECT_DATA[subj];
+  const domains = Array.from(new Set((sheet ? sheet.rows : []).map(r => r.domain).filter(Boolean))).sort();
+  domSel.innerHTML = '';
+  domains.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    domSel.appendChild(opt);
+  });
+}
+
+function renderEvalDomaine(){
+  const subj = document.getElementById('evalDomaineSubject').value;
+  const domaine = document.getElementById('evalDomaineDomaine').value;
+  const container = document.getElementById('evalDomaineContent');
+  container.innerHTML = '';
+  if (!subj || !domaine) return;
+
+  const sheet = SUBJECT_DATA[subj];
+  const rowsInDomain = (sheet ? sheet.rows : []).filter(r => r.domain === domaine);
+  if (rowsInDomain.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = "Aucune notion trouvée pour ce domaine.";
+    container.appendChild(note);
+    return;
+  }
+
+  // Une évaluation créée depuis cette vue est datée d'aujourd'hui (nouvelle tentative).
+  const todayStr = fmtDate(new Date());
+  const columns = [];
+  rowsInDomain.forEach(r => {
+    if (subj === 'Lecture'){
+      columns.push({ subjectKey: subj, domaine, titre: `${r.title} (écrite)` });
+    } else {
+      columns.push({ subjectKey: subj, domaine, titre: r.title });
+    }
+  });
+  if (subj === 'Lecture'){
+    rowsInDomain.forEach(r => columns.push({ subjectKey: subj, domaine, titre: `${r.title} (orale)` }));
+  }
+
+  function getScore(col, eleve){
+    const rec = loadEvalStore().find(r => r.discipline === col.subjectKey && r.titre === col.titre && r.eleve === eleve);
+    return rec ? parseInt(rec.score, 10) || 0 : 0;
+  }
+  function setScore(col, eleve, newScore){
+    newScore = Math.max(0, newScore);
+    upsertEvalRecord({ date: todayStr, discipline: col.subjectKey, domaine: col.domaine, titre: col.titre, eleve, score: String(newScore) });
+    return newScore;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'missions-table';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const cornerTh = document.createElement('th');
+  cornerTh.textContent = 'Élève';
+  headRow.appendChild(cornerTh);
+  columns.forEach(col => {
+    const th = document.createElement('th');
+    th.textContent = col.titre;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  STUDENTS.forEach(name => {
+    const tr = document.createElement('tr');
+    const nameTd = document.createElement('td');
+    nameTd.textContent = name;
+    tr.appendChild(nameTd);
+    columns.forEach(col => {
+      const td = document.createElement('td');
+      const score = getScore(col, name);
+      if (score >= 1) td.classList.add('eval-cell-validated');
+      const wrap = document.createElement('div');
+      wrap.className = 'missions-cell-chips';
+      const minus = document.createElement('button');
+      minus.className = 'missions-mini-chip';
+      minus.textContent = '−';
+      minus.addEventListener('click', () => { setScore(col, name, getScore(col, name) - 1); renderEvalDomaine(); });
+      const valSpan = document.createElement('span');
+      valSpan.textContent = score;
+      valSpan.style.minWidth = '18px';
+      valSpan.style.display = 'inline-block';
+      const plus = document.createElement('button');
+      plus.className = 'missions-mini-chip';
+      plus.textContent = '+';
+      plus.addEventListener('click', () => { setScore(col, name, getScore(col, name) + 1); renderEvalDomaine(); });
+      wrap.appendChild(minus); wrap.appendChild(valSpan); wrap.appendChild(plus);
+      td.appendChild(wrap);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function switchEvalMode(mode){
+  document.getElementById('evalModeDate').classList.toggle('eval-mode-active', mode === 'date');
+  document.getElementById('evalModeDomaine').classList.toggle('eval-mode-active', mode === 'domaine');
+  document.getElementById('evalDateMode').style.display = mode === 'date' ? 'block' : 'none';
+  document.getElementById('evalDomaineMode').style.display = mode === 'domaine' ? 'block' : 'none';
+  if (mode === 'domaine'){
+    renderEvalDomaineSubjectPicker();
+    renderEvalDomaine();
+  }
 }
 
 function shiftEvalDay(delta){
@@ -3935,6 +4102,8 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('nextDay').addEventListener('click', ()=>shiftJournalDay(1));
   document.getElementById('copyJournal').addEventListener('click', exportJournalDayToSheet);
   document.getElementById('obsPhotoInput').addEventListener('change', handleObsPhotoSelected);
+  document.getElementById('evalModeDate').addEventListener('click', () => switchEvalMode('date'));
+  document.getElementById('evalModeDomaine').addEventListener('click', () => switchEvalMode('domaine'));
   document.getElementById('copyAnalyse').addEventListener('click', exportAnalyseToSheet);
 
   document.getElementById('prevWeekHw').addEventListener('click', ()=>shiftHwWeek(-1));
