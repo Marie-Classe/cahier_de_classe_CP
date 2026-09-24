@@ -333,6 +333,13 @@
     top: 0;
     z-index: 2;
   }
+  .scroll-table-box{
+    max-height: 65vh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .scroll-table-box .missions-table{ border: none; }
   .missions-table td:first-child, .missions-table th:first-child{
     text-align: left;
     position: -webkit-sticky;
@@ -929,6 +936,31 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
   }
+  .obs-modalite-row{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.88rem;
+  }
+  .obs-modalite-row input[type="checkbox"]{
+    width: 20px; height: 20px; flex-shrink: 0;
+    accent-color: var(--gold);
+  }
+  .obs-modalite-row .obs-modalite-name{ flex: 1; }
+  .obs-modalite-row input[type="text"]{
+    flex: 2;
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+  }
   .obs-count{
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.68rem;
@@ -1022,7 +1054,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-22 09h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-24 10h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1137,12 +1169,34 @@
 
   <!-- OBSERVATIONS -->
   <section id="observations" class="panel">
-    <div class="datebar">
-      <select id="obsStudentFilter" class="suivi-select"></select>
+    <div class="datebar" style="gap:8px;">
+      <button id="obsModeEleve" class="eval-mode-btn eval-mode-active" style="flex:1;">Vue élève</button>
+      <button id="obsModeModalite" class="eval-mode-btn" style="flex:1;">Vue par modalité</button>
     </div>
-    <div class="obs-grid" id="obsGrid"></div>
-    <div class="actions">
-      <button class="primary" id="copyObs">Copier pour coller dans le Google Sheet</button>
+
+    <div id="obsEleveMode">
+      <div class="datebar">
+        <select id="obsStudentFilter" class="suivi-select"></select>
+      </div>
+      <div class="obs-grid" id="obsGrid"></div>
+      <div class="actions">
+        <button class="primary" id="copyObs">Copier pour coller dans le Google Sheet</button>
+      </div>
+    </div>
+
+    <div id="obsModaliteMode" style="display:none;">
+      <p class="empty-note" style="margin-bottom:10px;">Coche un élève pour lui ajouter une observation rapide liée à cette modalité de travail.</p>
+      <div class="datebar">
+        <select id="obsModaliteSelect" class="suivi-select">
+          <option value="Général">Vue générale</option>
+          <option value="Leçon">Leçon</option>
+          <option value="Modelage">Modelage</option>
+          <option value="Entraînement">Entraînement</option>
+          <option value="Mission">Mission</option>
+          <option value="Évaluation">Évaluation</option>
+        </select>
+      </div>
+      <div id="obsModaliteList"></div>
     </div>
   </section>
 
@@ -1161,7 +1215,7 @@
       </div>
       <div class="day-label" id="evalDayLabel"></div>
       <br>
-      <div id="evalContent"></div>
+      <div id="evalContent" class="scroll-table-box"></div>
       <div class="actions">
         <button class="primary" id="copyEval">Copier pour coller dans le Google Sheet</button>
       </div>
@@ -1173,7 +1227,7 @@
         <select id="evalDomaineSubject" class="suivi-select" style="flex:1;"></select>
         <select id="evalDomaineDomaine" class="suivi-select" style="flex:1;"></select>
       </div>
-      <div id="evalDomaineContent" style="overflow-x:auto; margin-top:10px;"></div>
+      <div id="evalDomaineContent" class="scroll-table-box" style="margin-top:10px;"></div>
     </div>
   </section>
 
@@ -1231,7 +1285,7 @@
       <summary style="padding:12px 16px; cursor:pointer; font-family:-apple-system,sans-serif; font-weight:600; font-size:0.9rem;">Choisir des compétences à évaluer ▾</summary>
       <div id="missionsSkillPicker" style="padding:0 16px 12px; max-height:320px; overflow-y:auto;"></div>
     </details>
-    <div id="missionsContent" style="overflow-x:auto;"></div>
+    <div id="missionsContent" class="scroll-table-box"></div>
   </section>
 
   <!-- LEÇONS DE LA SEMAINE (modalité Leçon = bleu) -->
@@ -3213,6 +3267,65 @@ function populateObsFilter(){
   });
 }
 
+function switchObsMode(mode){
+  document.getElementById('obsModeEleve').classList.toggle('eval-mode-active', mode === 'eleve');
+  document.getElementById('obsModeModalite').classList.toggle('eval-mode-active', mode === 'modalite');
+  document.getElementById('obsEleveMode').style.display = mode === 'eleve' ? 'block' : 'none';
+  document.getElementById('obsModaliteMode').style.display = mode === 'modalite' ? 'block' : 'none';
+  if (mode === 'modalite') renderObsModaliteList();
+}
+
+// Une observation cochée via cette vue est marquée par un préfixe [Modalité] pour
+// pouvoir la retrouver et la décocher facilement.
+function hasTodayModaliteObs(eleve, modalite){
+  const todayStr = fmtDate(new Date());
+  return loadObsStore().some(o => o.eleve === eleve && o.date === todayStr && o.texte.startsWith(`[${modalite}]`));
+}
+function toggleModaliteObs(eleve, modalite, noteText, checked){
+  const todayStr = fmtDate(new Date());
+  if (checked){
+    const texte = `[${modalite}]` + (noteText ? ' ' + noteText : '');
+    addObservation(eleve, texte);
+  } else {
+    // Retire l'entrée locale correspondante (best effort : si déjà synchronisée sur le
+    // Sheet, la ligne y reste — l'app ne sait pas encore supprimer une ligne du Sheet).
+    const store = loadObsStore();
+    const idx = store.findIndex(o => o.eleve === eleve && o.date === todayStr && o.texte.startsWith(`[${modalite}]`));
+    if (idx >= 0){ store.splice(idx, 1); saveObsStore(store); }
+  }
+}
+
+function renderObsModaliteList(){
+  const modalite = document.getElementById('obsModaliteSelect').value;
+  const container = document.getElementById('obsModaliteList');
+  container.innerHTML = '';
+  STUDENTS.forEach(name => {
+    const row = document.createElement('div');
+    row.className = 'obs-modalite-row';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = hasTodayModaliteObs(name, modalite);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'obs-modalite-name';
+    nameSpan.textContent = name;
+
+    const noteInput = document.createElement('input');
+    noteInput.type = 'text';
+    noteInput.placeholder = 'Note rapide (optionnel)';
+
+    cb.addEventListener('change', () => {
+      toggleModaliteObs(name, modalite, noteInput.value.trim(), cb.checked);
+    });
+
+    row.appendChild(cb);
+    row.appendChild(nameSpan);
+    row.appendChild(noteInput);
+    container.appendChild(row);
+  });
+}
+
 function renderObservations(){
   populateObsFilter();
   const filter = document.getElementById('obsStudentFilter').value;
@@ -4032,6 +4145,15 @@ function getMondayOfWeek(dateStr){
   return fmtDate(d);
 }
 
+// Dès qu'on a passé le mardi de la semaine en cours (donc à partir de mercredi),
+// l'onglet Leçons s'ouvre par défaut sur la semaine SUIVANTE plutôt que la semaine
+// en cours — pratique puisque mercredi est le jour de préparation.
+function getDefaultLeconsMonday(dateStr){
+  const isoDay = parseDate(dateStr).getDay() === 0 ? 7 : parseDate(dateStr).getDay(); // 1=lundi … 7=dimanche
+  const thisMonday = getMondayOfWeek(dateStr);
+  return isoDay > 2 ? addDays(thisMonday, 7) : thisMonday;
+}
+
 function dayStarEarned(quarters){
   return quarters.every(c => (c || 0) < 2);
 }
@@ -4338,6 +4460,9 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('copyJournal').addEventListener('click', exportJournalDayToSheet);
   document.getElementById('obsPhotoInput').addEventListener('change', handleObsPhotoSelected);
   document.getElementById('evalModeDate').addEventListener('click', () => switchEvalMode('date'));
+  document.getElementById('obsModeEleve').addEventListener('click', () => switchObsMode('eleve'));
+  document.getElementById('obsModeModalite').addEventListener('click', () => switchObsMode('modalite'));
+  document.getElementById('obsModaliteSelect').addEventListener('change', renderObsModaliteList);
   document.getElementById('evalModeDomaine').addEventListener('click', () => switchEvalMode('domaine'));
   document.getElementById('copyAnalyse').addEventListener('click', exportAnalyseToSheet);
 
@@ -4370,7 +4495,7 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('resetEdt').addEventListener('click', resetEdtDay);
 
   renderComportJour(defaultDate);
-  document.getElementById('leconsWeekLabel').dataset.monday = getMondayOfWeek(defaultDate);
+  document.getElementById('leconsWeekLabel').dataset.monday = getDefaultLeconsMonday(defaultDate);
   document.getElementById('prevWeekLecons').addEventListener('click', () => shiftLeconsWeek(-1));
   document.getElementById('nextWeekLecons').addEventListener('click', () => shiftLeconsWeek(1));
   document.getElementById('comportDate').addEventListener('change', e => {
