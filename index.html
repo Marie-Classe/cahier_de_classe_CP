@@ -49,7 +49,7 @@
     position: fixed;
     left: 0; right: 0; bottom: 0;
     display:grid;
-    grid-template-columns: repeat(10, 1fr);
+    grid-template-columns: repeat(11, 1fr);
     gap: 0;
     padding: 6px 2px calc(6px + env(safe-area-inset-bottom, 0px));
     background: var(--paper);
@@ -936,6 +936,31 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
   }
+  .profil-add-col-row{
+    display:flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .profil-add-col-row input{
+    flex: 1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+  }
+  .liste-cell-note{
+    font-size: 0.62rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    cursor: pointer;
+    max-width: 70px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    margin-top: 2px;
+  }
   .obs-modalite-row{
     display:flex;
     align-items:center;
@@ -1054,7 +1079,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-24 10h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-28 11h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1097,6 +1122,10 @@
   <button class="tab-btn" data-tab="missions">
     <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4.3 4.3 0 0 1 7-3.3A4.3 4.3 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M9 10.5l2 2 4-4.5"/></svg>
     <span>Missions</span>
+  </button>
+  <button class="tab-btn" data-tab="listes">
+    <svg viewBox="0 0 24 24"><path d="M5 6h.01M5 12h.01M5 18h.01M9 6h10M9 12h10M9 18h10"/></svg>
+    <span>Listes</span>
   </button>
 </nav>
 
@@ -1185,7 +1214,7 @@
     </div>
 
     <div id="obsModaliteMode" style="display:none;">
-      <p class="empty-note" style="margin-bottom:10px;">Coche un élève pour lui ajouter une observation rapide liée à cette modalité de travail.</p>
+      <p class="empty-note" style="margin-bottom:10px;">Coche les critères qui s'appliquent à chaque élève pour cette modalité. Ajoute ou retire des critères librement.</p>
       <div class="datebar">
         <select id="obsModaliteSelect" class="suivi-select">
           <option value="Général">Vue générale</option>
@@ -1196,7 +1225,11 @@
           <option value="Évaluation">Évaluation</option>
         </select>
       </div>
-      <div id="obsModaliteList"></div>
+      <div id="obsModaliteList" class="scroll-table-box"></div>
+      <div class="profil-add-col-row">
+        <input type="text" id="obsModaliteNewCritere" placeholder="Ajouter un critère (ex. A besoin d'aide)">
+        <button class="navbtn" id="obsModaliteAddCritere">+</button>
+      </div>
     </div>
   </section>
 
@@ -1286,6 +1319,22 @@
       <div id="missionsSkillPicker" style="padding:0 16px 12px; max-height:320px; overflow-y:auto;"></div>
     </details>
     <div id="missionsContent" class="scroll-table-box"></div>
+  </section>
+
+  <!-- LISTES PERSONNALISÉES (à cocher/noter, librement créées) -->
+  <section id="listes" class="panel">
+    <div class="datebar" style="gap:8px;">
+      <select id="listeSelect" class="suivi-select" style="flex:1;"></select>
+    </div>
+    <div class="profil-add-col-row" style="margin-bottom:14px;">
+      <input type="text" id="listeNewName" placeholder="Nom d'une nouvelle liste (ex. Autorisations sortie)">
+      <button class="navbtn" id="listeAddBtn">+</button>
+    </div>
+    <div id="listeContent" class="scroll-table-box"></div>
+    <div class="profil-add-col-row">
+      <input type="text" id="listeNewCritere" placeholder="Ajouter un critère à cette liste">
+      <button class="navbtn" id="listeAddCritereBtn">+</button>
+    </div>
   </section>
 
   <!-- LEÇONS DE LA SEMAINE (modalité Leçon = bleu) -->
@@ -3277,20 +3326,45 @@ function switchObsMode(mode){
 
 // Une observation cochée via cette vue est marquée par un préfixe [Modalité] pour
 // pouvoir la retrouver et la décocher facilement.
-function hasTodayModaliteObs(eleve, modalite){
-  const todayStr = fmtDate(new Date());
-  return loadObsStore().some(o => o.eleve === eleve && o.date === todayStr && o.texte.startsWith(`[${modalite}]`));
+// Critères modifiables par modalité (persistés localement)
+const MODALITE_CRITERIA_KEY = 'cahier_de_classe_modalite_criteres_v1';
+function loadModaliteCriteria(){
+  try{ return JSON.parse(localStorage.getItem(MODALITE_CRITERIA_KEY) || '{}'); }
+  catch(e){ return {}; }
 }
-function toggleModaliteObs(eleve, modalite, noteText, checked){
+function saveModaliteCriteria(obj){
+  try{ localStorage.setItem(MODALITE_CRITERIA_KEY, JSON.stringify(obj)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function getCriteriaFor(modalite){
+  return loadModaliteCriteria()[modalite] || [];
+}
+function addCriterionFor(modalite, critere){
+  const all = loadModaliteCriteria();
+  all[modalite] = all[modalite] || [];
+  if (!all[modalite].includes(critere)) all[modalite].push(critere);
+  saveModaliteCriteria(all);
+}
+function removeCriterionFor(modalite, critere){
+  const all = loadModaliteCriteria();
+  all[modalite] = (all[modalite] || []).filter(c => c !== critere);
+  saveModaliteCriteria(all);
+}
+
+function hasTodayCriterionObs(eleve, modalite, critere){
   const todayStr = fmtDate(new Date());
+  return loadObsStore().some(o => o.eleve === eleve && o.date === todayStr && o.texte === `[${modalite}] ${critere}`);
+}
+function toggleCriterionObs(eleve, modalite, critere, checked){
+  const todayStr = fmtDate(new Date());
+  const texte = `[${modalite}] ${critere}`;
   if (checked){
-    const texte = `[${modalite}]` + (noteText ? ' ' + noteText : '');
     addObservation(eleve, texte);
   } else {
     // Retire l'entrée locale correspondante (best effort : si déjà synchronisée sur le
     // Sheet, la ligne y reste — l'app ne sait pas encore supprimer une ligne du Sheet).
     const store = loadObsStore();
-    const idx = store.findIndex(o => o.eleve === eleve && o.date === todayStr && o.texte.startsWith(`[${modalite}]`));
+    const idx = store.findIndex(o => o.eleve === eleve && o.date === todayStr && o.texte === texte);
     if (idx >= 0){ store.splice(idx, 1); saveObsStore(store); }
   }
 }
@@ -3299,31 +3373,60 @@ function renderObsModaliteList(){
   const modalite = document.getElementById('obsModaliteSelect').value;
   const container = document.getElementById('obsModaliteList');
   container.innerHTML = '';
-  STUDENTS.forEach(name => {
-    const row = document.createElement('div');
-    row.className = 'obs-modalite-row';
+  const criteres = getCriteriaFor(modalite);
 
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = hasTodayModaliteObs(name, modalite);
+  if (criteres.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.style.padding = '14px';
+    note.textContent = "Aucun critère pour cette modalité pour l'instant — ajoute-en un ci-dessous.";
+    container.appendChild(note);
+    return;
+  }
 
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'obs-modalite-name';
-    nameSpan.textContent = name;
-
-    const noteInput = document.createElement('input');
-    noteInput.type = 'text';
-    noteInput.placeholder = 'Note rapide (optionnel)';
-
-    cb.addEventListener('change', () => {
-      toggleModaliteObs(name, modalite, noteInput.value.trim(), cb.checked);
-    });
-
-    row.appendChild(cb);
-    row.appendChild(nameSpan);
-    row.appendChild(noteInput);
-    container.appendChild(row);
+  const table = document.createElement('table');
+  table.className = 'missions-table';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const cornerTh = document.createElement('th');
+  cornerTh.textContent = 'Élève';
+  headRow.appendChild(cornerTh);
+  criteres.forEach(critere => {
+    const th = document.createElement('th');
+    const label = document.createElement('span');
+    label.textContent = critere;
+    th.appendChild(label);
+    const rm = document.createElement('button');
+    rm.textContent = '✕';
+    rm.title = 'Retirer ce critère';
+    rm.style.cssText = 'margin-left:4px;border:none;background:none;color:#B33;cursor:pointer;font-size:0.75rem;';
+    rm.addEventListener('click', () => { removeCriterionFor(modalite, critere); renderObsModaliteList(); });
+    th.appendChild(rm);
+    headRow.appendChild(th);
   });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  STUDENTS.forEach(name => {
+    const tr = document.createElement('tr');
+    const nameTd = document.createElement('td');
+    nameTd.textContent = name;
+    tr.appendChild(nameTd);
+    criteres.forEach(critere => {
+      const td = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.style.width = '18px'; cb.style.height = '18px';
+      cb.checked = hasTodayCriterionObs(name, modalite, critere);
+      cb.addEventListener('change', () => toggleCriterionObs(name, modalite, critere, cb.checked));
+      td.appendChild(cb);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
 }
 
 function renderObservations(){
@@ -3867,6 +3970,160 @@ function copyEdtToClipboard(){
 }
 
 // ---------- APC ----------
+// ---------- Listes personnalisées (à cocher/noter, librement créées) ----------
+const LISTES_CONFIG_KEY = 'cahier_de_classe_listes_config_v1';
+const LISTES_VALUES_KEY = 'cahier_de_classe_listes_valeurs_v1';
+
+function loadListesConfig(){
+  try{ return JSON.parse(localStorage.getItem(LISTES_CONFIG_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveListesConfig(obj){
+  try{ localStorage.setItem(LISTES_CONFIG_KEY, JSON.stringify(obj)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function loadListesValues(){
+  try{ return JSON.parse(localStorage.getItem(LISTES_VALUES_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function saveListesValues(arr){
+  try{ localStorage.setItem(LISTES_VALUES_KEY, JSON.stringify(arr)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function getListeNames(){ return Object.keys(loadListesConfig()).sort(); }
+function createListe(name){
+  const cfg = loadListesConfig();
+  if (!cfg[name]) { cfg[name] = { criteres: [] }; saveListesConfig(cfg); }
+}
+function getListeCriteres(name){
+  const cfg = loadListesConfig();
+  return (cfg[name] && cfg[name].criteres) || [];
+}
+function addListeCritere(name, critere){
+  const cfg = loadListesConfig();
+  if (!cfg[name]) cfg[name] = { criteres: [] };
+  if (!cfg[name].criteres.includes(critere)) cfg[name].criteres.push(critere);
+  saveListesConfig(cfg);
+}
+function removeListeCritere(name, critere){
+  const cfg = loadListesConfig();
+  if (cfg[name]) cfg[name].criteres = cfg[name].criteres.filter(c => c !== critere);
+  saveListesConfig(cfg);
+}
+function getListeValue(liste, eleve, critere){
+  const store = loadListesValues();
+  return store.find(v => v.liste === liste && v.eleve === eleve && v.critere === critere) || { coche: false, note: '' };
+}
+function setListeValue(liste, eleve, critere, coche, note){
+  const store = loadListesValues();
+  const idx = store.findIndex(v => v.liste === liste && v.eleve === eleve && v.critere === critere);
+  const rec = { liste, eleve, critere, coche, note };
+  if (idx >= 0) store[idx] = rec; else store.push(rec);
+  saveListesValues(store);
+  // colonnes du Sheet (onglet "Listes") : Liste, Élève, Critère, Coché, Note
+  sheetSaveRow('Listes', [liste, eleve, critere, coche ? 1 : 0, note || ''], [0, 1, 2]);
+}
+
+function populateListeSelect(){
+  const sel = document.getElementById('listeSelect');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  const names = getListeNames();
+  if (names.length === 0){
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = '— Aucune liste créée —';
+    sel.appendChild(opt);
+    return;
+  }
+  names.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    sel.appendChild(opt);
+  });
+  if (names.includes(prev)) sel.value = prev;
+}
+
+function renderListeContent(){
+  const listeName = document.getElementById('listeSelect').value;
+  const container = document.getElementById('listeContent');
+  container.innerHTML = '';
+  if (!listeName){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.style.padding = '14px';
+    note.textContent = "Crée une première liste ci-dessus pour commencer.";
+    container.appendChild(note);
+    return;
+  }
+
+  const criteres = getListeCriteres(listeName);
+  if (criteres.length === 0){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.style.padding = '14px';
+    note.textContent = "Aucun critère dans cette liste — ajoute-en un ci-dessous.";
+    container.appendChild(note);
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'missions-table';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const cornerTh = document.createElement('th');
+  cornerTh.textContent = 'Élève';
+  headRow.appendChild(cornerTh);
+  criteres.forEach(critere => {
+    const th = document.createElement('th');
+    const label = document.createElement('span');
+    label.textContent = critere;
+    th.appendChild(label);
+    const rm = document.createElement('button');
+    rm.textContent = '✕';
+    rm.title = 'Retirer ce critère';
+    rm.style.cssText = 'margin-left:4px;border:none;background:none;color:#B33;cursor:pointer;font-size:0.75rem;';
+    rm.addEventListener('click', () => { removeListeCritere(listeName, critere); renderListeContent(); });
+    th.appendChild(rm);
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  STUDENTS.forEach(name => {
+    const tr = document.createElement('tr');
+    const nameTd = document.createElement('td');
+    nameTd.textContent = name;
+    tr.appendChild(nameTd);
+    criteres.forEach(critere => {
+      const td = document.createElement('td');
+      const val = getListeValue(listeName, name, critere);
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.style.width = '18px'; cb.style.height = '18px';
+      cb.checked = !!val.coche;
+      cb.addEventListener('change', () => {
+        setListeValue(listeName, name, critere, cb.checked, val.note);
+      });
+      td.appendChild(cb);
+      const noteSpan = document.createElement('span');
+      noteSpan.className = 'liste-cell-note';
+      noteSpan.textContent = val.note || '+ note';
+      noteSpan.addEventListener('click', () => {
+        const newNote = window.prompt(`Note — ${critere} — ${name}`, val.note || '');
+        if (newNote === null) return;
+        setListeValue(listeName, name, critere, cb.checked, newNote);
+        renderListeContent();
+      });
+      td.appendChild(noteSpan);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
 function renderApc(){
   const container = document.getElementById('apcContent');
   container.innerHTML = '';
@@ -4049,6 +4306,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       renderMissionsSkillPicker();
       syncMissionsFromSheet().then(renderMissions);
       renderMissions();
+    }
+    if (btn.dataset.tab === 'listes'){
+      populateListeSelect();
+      renderListeContent();
     }
     if (btn.dataset.tab === 'lecons'){
       refreshProgressionData().then(ok => { if (ok) renderLecons(document.getElementById('leconsWeekLabel').dataset.monday); });
@@ -4463,6 +4724,37 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('obsModeEleve').addEventListener('click', () => switchObsMode('eleve'));
   document.getElementById('obsModeModalite').addEventListener('click', () => switchObsMode('modalite'));
   document.getElementById('obsModaliteSelect').addEventListener('change', renderObsModaliteList);
+  document.getElementById('obsModaliteAddCritere').addEventListener('click', () => {
+    const input = document.getElementById('obsModaliteNewCritere');
+    const val = input.value.trim();
+    if (!val) return;
+    addCriterionFor(document.getElementById('obsModaliteSelect').value, val);
+    input.value = '';
+    renderObsModaliteList();
+  });
+  populateListeSelect();
+  renderListeContent();
+  document.getElementById('listeSelect').addEventListener('change', renderListeContent);
+  document.getElementById('listeAddBtn').addEventListener('click', () => {
+    const input = document.getElementById('listeNewName');
+    const val = input.value.trim();
+    if (!val) return;
+    createListe(val);
+    input.value = '';
+    populateListeSelect();
+    document.getElementById('listeSelect').value = val;
+    renderListeContent();
+  });
+  document.getElementById('listeAddCritereBtn').addEventListener('click', () => {
+    const listeName = document.getElementById('listeSelect').value;
+    if (!listeName){ showToast('Crée ou choisis une liste d\'abord.'); return; }
+    const input = document.getElementById('listeNewCritere');
+    const val = input.value.trim();
+    if (!val) return;
+    addListeCritere(listeName, val);
+    input.value = '';
+    renderListeContent();
+  });
   document.getElementById('evalModeDomaine').addEventListener('click', () => switchEvalMode('domaine'));
   document.getElementById('copyAnalyse').addEventListener('click', exportAnalyseToSheet);
 
