@@ -1185,7 +1185,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-10-01 10h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-10-01 12h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -2159,48 +2159,88 @@ function renderDevoirs(mondayStr){
   });
 }
 
-// Look through the previous day's actual schedule (via Emploi du temps template)
-// and build homework items for Lecture, Maths, Dictée and Problèmes.
+// ---------- Paramétrage des devoirs ----------
+// Nombre de semaines précédentes prises en compte pour les révisions de maths.
+const HW_MATHS_REVIEW_WEEKS = 2;
+
+// Titres des leçons (cases bleues) d'une matière vues pendant la semaine qui se trouve
+// "weeksBack" semaines avant celle de la date donnée. Sans doublons, dans l'ordre.
+function lessonsSeenInWeek(subjectKey, anyDateInWeek, weeksBack){
+  const monday = addDays(getMondayOfWeek(anyDateInWeek), -7 * weeksBack);
+  const seen = [];
+  const known = new Set();
+  for (let i = 0; i < 7; i++){
+    getExactColoredEntries(subjectKey, addDays(monday, i), LECON_COLOR_HEX).forEach(e => {
+      const title = String(e.title || '').trim();
+      if (!title || known.has(title)) return;
+      known.add(title);
+      seen.push({ title, extra: e.extra });
+    });
+  }
+  return seen;
+}
+
+function formatLessonList(list, withExtra){
+  return list.map(e => (withExtra && e.extra) ? `${e.title} (${e.extra})` : e.title).join(', ');
+}
+
+// Devoirs pour un jour donné (dueDateStr) :
+//  - Lecture tous les soirs. Lundi/jeudi : sons vus la semaine précédente.
+//    Mardi/vendredi : sons vus la semaine d'encore avant.
+//  - Maths. Lundi/jeudi : leçons des semaines précédentes.
+//    Mardi/vendredi : calcul mental vu les semaines précédentes.
+//  - Dictée (lundi/jeudi) et Problèmes (mardi/vendredi), d'après la séance précédente.
 function devoirsForSession(sessionDateStr, dueDateStr){
-  const wd = weekdayNameFr(sessionDateStr);
-  const slots = getEffectiveSlots(wd) || [];
   const items = [];
   const dueWd = dueDateStr ? weekdayNameFr(dueDateStr) : null;
-  slots.forEach(slot => {
-    const colorName = MODALITE_TO_COLORNAME[slot.modalite];
-    const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
-    if (!colorName || !subjectKey) return;
+  const isMonThu = dueWd === 'lundi' || dueWd === 'jeudi';
+  const isTueFri = dueWd === 'mardi' || dueWd === 'vendredi';
 
-    // Devoir du week-end (dû le lundi) pour Problèmes : un problème de la semaine
-    // précédente plutôt que celui de vendredi, pour laisser le temps de le refaire.
-    if (subjectKey === 'Problèmes' && dueWd === 'lundi'){
-      const priorDate = addDays(sessionDateStr, -7);
-      const found = getActiveEntries('Problèmes', priorDate).find(e => e.modality === colorName);
-      if (found) items.push({ subject: 'Problèmes', text: `Refaire : ${found.title}` });
-      return;
-    }
+  // Lecture
+  if (isMonThu || isTueFri){
+    const weeksBack = isMonThu ? 1 : 2;
+    const sounds = lessonsSeenInWeek('Lecture', dueDateStr, weeksBack);
+    const when = isMonThu ? 'la semaine précédente' : "la semaine d'avant";
+    items.push({
+      subject: 'Lecture',
+      text: sounds.length
+        ? `Lecture du soir — sons vus ${when} : ${formatLessonList(sounds, true)}`
+        : 'Lecture du soir'
+    });
+  }
 
-    const found = getEntryForModality(subjectKey, sessionDateStr, colorName);
-    if (!found) return;
-    if (subjectKey === 'Lecture' && found.extra){
-      if (found.modality === 'Modelage'){
-        items.push({ subject: 'Lecture', text: `Lire ${found.extra} (${found.title})` });
-      } else if (found.modality === 'Entraînement'){
-        items.push({ subject: 'Lecture', text: `Relire ${found.extra} (${found.title})` });
-      }
-    } else if (subjectKey === 'Maths'){
-      if (found.modality === 'Leçon'){
-        items.push({ subject: 'Maths', text: `Flashcard n°1 — ${found.title}` });
-      } else if (found.modality === 'Entraînement'){
-        items.push({ subject: 'Maths', text: `Flashcard n°2 — ${found.title}` });
-      }
-    } else if (subjectKey === 'Dictée' && found.modality === 'Modelage'){
-      items.push({ subject: 'Dictée', text: `Revoir : ${found.title}` });
-    } else if (subjectKey === 'Problèmes'){
-      items.push({ subject: 'Problèmes', text: `Refaire : ${found.title}` });
-    }
-  });
+  // Maths
+  if (isMonThu){
+    let lessons = [];
+    for (let w = 1; w <= HW_MATHS_REVIEW_WEEKS; w++) lessons = lessons.concat(lessonsSeenInWeek('Maths', dueDateStr, w));
+    const uniq = lessons.filter((e, i) => lessons.findIndex(x => x.title === e.title) === i);
+    if (uniq.length) items.push({ subject: 'Maths', text: `Réviser les leçons des semaines précédentes : ${formatLessonList(uniq, false)}` });
+  } else if (isTueFri){
+    let cm = [];
+    for (let w = 1; w <= HW_MATHS_REVIEW_WEEKS; w++) cm = cm.concat(lessonsSeenInWeek('Calcul mental', dueDateStr, w));
+    const uniq = cm.filter((e, i) => cm.findIndex(x => x.title === e.title) === i);
+    if (uniq.length) items.push({ subject: 'Calcul mental', text: `Réviser le calcul mental vu les semaines précédentes : ${formatLessonList(uniq, false)}` });
+  }
+
+  // Dictée : 2 par semaine (dues le lundi et le jeudi) = la dictée en phase de modelage
+  // au moment du devoir. Problèmes : dus le mardi et le vendredi = ceux en entraînement.
+  if (isMonThu){
+    const dictees = getAllEntriesForModality('Dictée', sessionDateStr, 'Modelage');
+    if (dictees.length) items.push({ subject: 'Dictée', text: `Apprendre la dictée : ${dictees.map(e => String(e.title).trim()).join(' / ')}` });
+  } else if (isTueFri){
+    const pbs = getAllEntriesForModality('Problèmes', sessionDateStr, 'Entraînement');
+    if (pbs.length) items.push({ subject: 'Problèmes', text: `Refaire les problèmes : ${pbs.map(e => problemeTitleLabel(e.title)).join(', ')}` });
+  }
   return items;
+}
+
+// Dans la feuille source, les numéros de problèmes (ex. "1-2") ont été convertis en
+// dates par le tableur (ex. 2026-02-01 = jour 1, mois 2). On les remet sous la forme
+// "jour-mois" pour qu'ils restent lisibles.
+function problemeTitleLabel(title){
+  const m = String(title).match(/^\d{4}-(\d{2})-(\d{2})/);
+  if (!m) return String(title).trim();
+  return `n°${parseInt(m[2], 10)}-${parseInt(m[1], 10)}`;
 }
 
 // ---------- Persistance locale des évaluations ----------
