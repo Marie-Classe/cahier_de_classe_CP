@@ -49,7 +49,7 @@
     position: fixed;
     left: 0; right: 0; bottom: 0;
     display:grid;
-    grid-template-columns: repeat(11, 1fr);
+    grid-template-columns: repeat(12, 1fr);
     gap: 0;
     padding: 6px 2px calc(6px + env(safe-area-inset-bottom, 0px));
     background: var(--paper);
@@ -961,6 +961,112 @@
     display: block;
     margin-top: 2px;
   }
+  #appelJourContent{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  @media (min-width: 860px){
+    #appelJourContent{ grid-template-columns: repeat(5, 1fr); }
+  }
+  .appel-row{
+    display:flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    padding: 0 6px;
+    height: 46px;
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .appel-row:active{ transform: scale(0.97); }
+  .appel-badge{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.66rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .appel-row-top{
+    display:flex;
+    align-items:center;
+    gap: 6px;
+  }
+  .appel-name{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.8rem;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .appel-status-btn{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border: 1.5px solid var(--line);
+    background: white;
+    border-radius: 8px;
+    padding: 6px 0;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+  }
+  .appel-motif{
+    width: 100%;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.78rem;
+    padding: 5px 7px;
+    border: 1px dashed var(--line);
+    border-radius: 7px;
+    margin-top: 4px;
+  }
+  .appel-pencil{
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 4px 2px;
+    flex-shrink: 0;
+  }
+  .appel-pencil.has-motif{ color: var(--gold); }
+  .appel-bilan-table th, .appel-bilan-table td{
+    padding: 2px 5px;
+    font-size: 0.7rem;
+    line-height: 1.3;
+  }
+  .appel-bilan-table th:first-child, .appel-bilan-table td:first-child{
+    max-width: none;
+    white-space: nowrap;
+  }
+  #appelBilanView .datebar{ margin-bottom: 8px; }
+  #appelGeneralMonth, #appelGeneralTotal{
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+  }
+  .appel-subtab-btn{
+    flex:1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+    cursor:pointer;
+  }
+  .appel-subtab-btn.active{
+    background: var(--ink);
+    color: white;
+    border-color: var(--ink);
+  }
   .obs-modalite-row{
     display:flex;
     align-items:center;
@@ -1079,10 +1185,14 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-09-28 11h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-10-01 10h00 UTC</p>
 </header>
 
 <nav class="tabs">
+  <button class="tab-btn" data-tab="appel">
+    <svg viewBox="0 0 24 24"><path d="M4 5.5c-.5 0-1 .5-1 1v13c0 .5.5 1 1 1h16c.5 0 1-.5 1-1v-13c0-.5-.5-1-1-1H4z"/><path d="M4 9.5h17M8 5.5v-2M16 5.5v-2"/><path d="M7.5 13.5l2 2 3-3.5"/></svg>
+    <span>Appel</span>
+  </button>
   <button class="tab-btn" data-tab="edt">
     <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg>
     <span>EDT</span>
@@ -1130,6 +1240,43 @@
 </nav>
 
 <main>
+
+  <!-- APPEL -->
+  <section id="appel" class="panel">
+    <div class="comport-subtabs">
+      <button class="appel-subtab-btn active" data-asub="jour">Vue du jour</button>
+      <button class="appel-subtab-btn" data-asub="bilan">Bilan du mois</button>
+    </div>
+
+    <div id="appelJourView">
+      <div class="datebar">
+        <button class="navbtn" id="prevDayAppel">←</button>
+        <input type="date" id="appelDate">
+        <button class="navbtn" id="nextDayAppel">→</button>
+      </div>
+      <div class="day-label" id="appelDayLabel"></div>
+      <br>
+      <div class="legend" style="gap:4px 12px; margin-bottom:8px;">
+        <span><i class="comport-legend-dot" style="background:#FFE0B2;border-color:#E09B3B"></i> 1 tap : matin</span>
+        <span><i class="comport-legend-dot" style="background:#FFCC80;border-color:#E08A1F"></i> 2 : après-midi</span>
+        <span><i class="comport-legend-dot" style="background:#EF5350;border-color:#C62828"></i> 3 : journée</span>
+        <span><i class="comport-legend-dot" style="background:white;border-color:#E4DCC9"></i> 4 : présent</span>
+      </div>
+      <div id="appelJourContent"></div>
+    </div>
+
+    <div id="appelBilanView" style="display:none;">
+      <div class="datebar">
+        <button class="navbtn" id="prevMonthAppel">←</button>
+        <span id="appelMonthLabel" style="flex:1; text-align:center; font-family:-apple-system,sans-serif; font-size:0.95rem; text-transform:capitalize;"></span>
+        <button class="navbtn" id="nextMonthAppel">→</button>
+      </div>
+      <div id="appelGeneralMonth" class="comport-summary"></div>
+      <div id="appelGeneralTotal" class="comport-summary"></div>
+      <div id="appelBilanContent"></div>
+    </div>
+  </section>
+
 
   <!-- CAHIER JOURNAL -->
   <section id="journal" class="panel active">
@@ -4124,6 +4271,258 @@ function renderListeContent(){
   container.appendChild(table);
 }
 
+// ---------- Appel ----------
+const APPEL_KEY = 'cahier_de_classe_appel_v1';
+const APPEL_STATUTS = [
+  { label: 'Présent',             short: 'Présent',    bg: '#FFFFFF', border: '#E4DCC9' },
+  { label: 'Absent — matin',      short: 'Abs. AM',    bg: '#FFE0B2', border: '#E09B3B' },
+  { label: 'Absent — après-midi', short: 'Abs. PM',    bg: '#FFCC80', border: '#E08A1F' },
+  { label: 'Absent — journée',    short: 'Abs. jour',  bg: '#EF5350', border: '#C62828' }
+];
+
+function loadAppelStore(){
+  try{ return JSON.parse(localStorage.getItem(APPEL_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function saveAppelStore(arr){
+  try{ localStorage.setItem(APPEL_KEY, JSON.stringify(arr)); }
+  catch(e){ /* stockage indisponible */ }
+}
+function getAppelRecord(dateStr, eleve){
+  const store = loadAppelStore();
+  return store.find(r => r.date === dateStr && r.eleve === eleve) || { date: dateStr, eleve, statut: 0, motif: '' };
+}
+function upsertAppelRecord(rec){
+  const store = loadAppelStore();
+  const idx = store.findIndex(r => r.date === rec.date && r.eleve === rec.eleve);
+  if (idx >= 0) store[idx] = rec; else store.push(rec);
+  saveAppelStore(store);
+  // colonnes du Sheet (onglet "Appel") : Date, Élève, Statut, Motif
+  debouncedSheetSaveRow(`Appel|${rec.date}|${rec.eleve}`, 'Appel', [rec.date, rec.eleve, rec.statut, rec.motif || ''], [0, 1]);
+}
+async function syncAppelFromSheet(){
+  const rows = await sheetGetRows('Appel');
+  if (!rows || rows.length <= 1) return;
+  const store = loadAppelStore();
+  const key = r => `${r.date}|${r.eleve}`;
+  const known = new Map(store.map(r => [key(r), r]));
+  let changed = false;
+  rows.slice(1).forEach(r => {
+    const [dateRaw, eleve, statut, motif] = r;
+    const date = normalizeDateStr(dateRaw);
+    if (!date || !eleve) return;
+    const rec = { date, eleve, statut: parseInt(statut, 10) || 0, motif: motif || '' };
+    const k = key(rec);
+    const existing = known.get(k);
+    if (!existing || existing.statut !== rec.statut || existing.motif !== rec.motif){
+      known.set(k, rec);
+      changed = true;
+    }
+  });
+  if (changed) saveAppelStore(Array.from(known.values()));
+}
+
+function renderAppelJour(dateStr){
+  document.getElementById('appelDate').value = dateStr;
+  document.getElementById('appelDayLabel').textContent = dayLabelFr(dateStr);
+  const container = document.getElementById('appelJourContent');
+  container.innerHTML = '';
+
+  STUDENTS.forEach(name => {
+    const rec = getAppelRecord(dateStr, name);
+    const row = document.createElement('div');
+    row.className = 'appel-row';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'appel-name';
+    nameEl.textContent = name;
+    row.appendChild(nameEl);
+
+    const badge = document.createElement('span');
+    badge.className = 'appel-badge';
+    row.appendChild(badge);
+
+    const pencil = document.createElement('button');
+    pencil.className = 'appel-pencil' + (rec.motif ? ' has-motif' : '');
+    pencil.innerHTML = '✎';
+    pencil.title = 'Motif';
+    row.appendChild(pencil);
+
+    const applyStatusStyle = (statut) => {
+      const st = APPEL_STATUTS[statut];
+      row.style.background = st.bg;
+      row.style.borderColor = st.border;
+      row.style.color = statut === 3 ? 'white' : 'var(--ink)';
+      badge.textContent = ['', 'AM', 'PM', 'Jour'][statut];
+      pencil.style.color = statut === 3 ? 'white' : '';
+    };
+    applyStatusStyle(rec.statut);
+
+    // un tap sur la carte de l'élève fait avancer le statut
+    row.addEventListener('click', () => {
+      rec.statut = (rec.statut + 1) % APPEL_STATUTS.length;
+      upsertAppelRecord(rec);
+      applyStatusStyle(rec.statut);
+    });
+
+    // le crayon ouvre la saisie du motif sans changer le statut
+    pencil.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = window.prompt(`Motif — ${name}`, rec.motif || '');
+      if (val === null) return;
+      rec.motif = val.trim();
+      upsertAppelRecord(rec);
+      pencil.classList.toggle('has-motif', !!rec.motif);
+    });
+
+    container.appendChild(row);
+  });
+}
+
+function shiftAppelDay(delta){
+  const cur = document.getElementById('appelDate').value;
+  const next = adjustToSchoolDay(addDays(cur, delta), delta >= 0 ? 1 : -1);
+  renderAppelJour(next);
+}
+
+function switchAppelSubtab(sub){
+  document.querySelectorAll('.appel-subtab-btn').forEach(b => b.classList.toggle('active', b.dataset.asub === sub));
+  document.getElementById('appelJourView').style.display = sub === 'jour' ? '' : 'none';
+  document.getElementById('appelBilanView').style.display = sub === 'bilan' ? '' : 'none';
+  if (sub === 'bilan') renderAppelBilan(document.getElementById('appelMonthLabel').dataset.month);
+}
+
+// Pour l'appel, le 1er septembre compte (accueil échelonné avec les parents, sans
+// apprentissages mais bien présent dans l'appel), contrairement au reste de l'app.
+const APPEL_START_DATE = '2026-09-01';
+function getAppelSchoolDaysUpTo(endDateStr){
+  const days = [];
+  let d = APPEL_START_DATE;
+  let guard = 0;
+  while (d <= endDateStr && guard < 400){
+    if (['lundi','mardi','jeudi','vendredi'].includes(weekdayNameFr(d))) days.push(d);
+    d = addDays(d, 1);
+    guard++;
+  }
+  return days;
+}
+
+function getSchoolDaysInMonth(yearMonth){ // yearMonth = "YYYY-MM"
+  const [y, m] = yearMonth.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const rentree = APPEL_START_DATE;
+  const days = [];
+  for (let d = 1; d <= daysInMonth; d++){
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (dateStr < rentree) continue; // avant la rentrée, pas un jour de classe
+    const wd = weekdayNameFr(dateStr);
+    if (['lundi','mardi','jeudi','vendredi'].includes(wd)) days.push(dateStr);
+  }
+  return days;
+}
+function monthLabelFr(yearMonth){
+  const [y, m] = yearMonth.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+}
+function shiftAppelMonth(delta){
+  const cur = document.getElementById('appelMonthLabel').dataset.month;
+  const [y, m] = cur.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  const next = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('appelMonthLabel').dataset.month = next;
+  renderAppelBilan(next);
+}
+
+// Compte les demi-journées d'absence d'un élève sur un ensemble de jours donné
+// (1 = une demi-journée, comme les statuts de l'appel).
+function countHalfAbsences(days, store, eleve){
+  let halfAbsent = 0;
+  days.forEach(d => {
+    const rec = store.find(r => r.date === d && r.eleve === eleve);
+    const statut = rec ? rec.statut : 0;
+    if (statut === 1 || statut === 2) halfAbsent += 1;
+    else if (statut === 3) halfAbsent += 2;
+  });
+  return halfAbsent;
+}
+
+function renderAppelBilan(yearMonth){
+  document.getElementById('appelMonthLabel').dataset.month = yearMonth;
+  document.getElementById('appelMonthLabel').textContent = monthLabelFr(yearMonth);
+  const container = document.getElementById('appelBilanContent');
+  const generalMonthEl = document.getElementById('appelGeneralMonth');
+  const generalTotalEl = document.getElementById('appelGeneralTotal');
+  container.innerHTML = '';
+  generalMonthEl.innerHTML = '';
+  generalTotalEl.innerHTML = '';
+
+  const todayStr = fmtDate(new Date());
+  const schoolDays = getSchoolDaysInMonth(yearMonth).filter(d => d <= todayStr);
+  const allSchoolDays = getAppelSchoolDaysUpTo(todayStr);
+  const store = loadAppelStore();
+
+  if (schoolDays.length === 0){
+    generalMonthEl.textContent = "Aucun jour de classe déjà passé sur ce mois.";
+    container.innerHTML = '';
+    return;
+  }
+
+  // ---- Calcul général DU MOIS (toute la classe) ----
+  const possibleMonth = schoolDays.length * 2 * STUDENTS.length;
+  const absentMonth = STUDENTS.reduce((sum, name) => sum + countHalfAbsences(schoolDays, store, name), 0);
+  const tauxAbsMonth = possibleMonth > 0 ? (absentMonth / possibleMonth * 100) : 0;
+  generalMonthEl.innerHTML =
+    `<div>📅 Calcul général du mois</div>` +
+    `<div style="font-weight:normal; font-size:0.82rem; margin-top:4px;">` +
+    `Demi-journées possibles : ${possibleMonth} — Absences : ${absentMonth} ` +
+    `(${tauxAbsMonth.toFixed(1)} % d'absence, ${(100 - tauxAbsMonth).toFixed(1)} % de présence)</div>`;
+
+  // ---- Calcul général TOTAL (depuis la rentrée) ----
+  const possibleTotal = allSchoolDays.length * 2 * STUDENTS.length;
+  const absentTotal = STUDENTS.reduce((sum, name) => sum + countHalfAbsences(allSchoolDays, store, name), 0);
+  const tauxAbsTotal = possibleTotal > 0 ? (absentTotal / possibleTotal * 100) : 0;
+  generalTotalEl.innerHTML =
+    `<div>🗓️ Calcul général (depuis la rentrée)</div>` +
+    `<div style="font-weight:normal; font-size:0.82rem; margin-top:4px;">` +
+    `Demi-journées possibles : ${possibleTotal} — Absences : ${absentTotal} ` +
+    `(${tauxAbsTotal.toFixed(1)} % d'absence, ${(100 - tauxAbsTotal).toFixed(1)} % de présence)</div>`;
+
+  // ---- Tableau compact élève par élève (en demi-journées, 1 = une demi-journée) ----
+  const table = document.createElement('table');
+  table.className = 'missions-table appel-bilan-table';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['Élève', 'Absences', "Taux d'abs.", 'Taux prés.'].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  const totalHalfDays = schoolDays.length * 2;
+  STUDENTS.forEach(name => {
+    const halfAbsent = countHalfAbsences(schoolDays, store, name);
+    const tauxAbsence = totalHalfDays > 0 ? (halfAbsent / totalHalfDays * 100) : 0;
+    const tauxPresence = 100 - tauxAbsence;
+
+    const tr = document.createElement('tr');
+    const nameTd = document.createElement('td');
+    nameTd.textContent = name;
+    nameTd.style.textAlign = 'left';
+    tr.appendChild(nameTd);
+    [String(halfAbsent), tauxAbsence.toFixed(0) + '%', tauxPresence.toFixed(0) + '%'].forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
 function renderApc(){
   const container = document.getElementById('apcContent');
   container.innerHTML = '';
@@ -4310,6 +4709,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'listes'){
       populateListeSelect();
       renderListeContent();
+    }
+    if (btn.dataset.tab === 'appel'){
+      syncAppelFromSheet().then(() => renderAppelJour(document.getElementById('appelDate').value));
+      renderAppelJour(document.getElementById('appelDate').value);
     }
     if (btn.dataset.tab === 'lecons'){
       refreshProgressionData().then(ok => { if (ok) renderLecons(document.getElementById('leconsWeekLabel').dataset.monday); });
@@ -4735,6 +5138,20 @@ function rerenderAfterProgressionRefresh(){
   populateListeSelect();
   renderListeContent();
   document.getElementById('listeSelect').addEventListener('change', renderListeContent);
+
+  const appelDefaultDate = adjustToSchoolDay(defaultDate, 1);
+  renderAppelJour(appelDefaultDate);
+  document.getElementById('appelDate').addEventListener('change', e => renderAppelJour(adjustToSchoolDay(e.target.value, 1)));
+  document.getElementById('prevDayAppel').addEventListener('click', () => shiftAppelDay(-1));
+  document.getElementById('nextDayAppel').addEventListener('click', () => shiftAppelDay(1));
+  document.querySelectorAll('.appel-subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchAppelSubtab(btn.dataset.asub));
+  });
+  const currentMonth = appelDefaultDate.slice(0, 7);
+  document.getElementById('appelMonthLabel').dataset.month = currentMonth;
+  document.getElementById('appelMonthLabel').textContent = monthLabelFr(currentMonth);
+  document.getElementById('prevMonthAppel').addEventListener('click', () => shiftAppelMonth(-1));
+  document.getElementById('nextMonthAppel').addEventListener('click', () => shiftAppelMonth(1));
   document.getElementById('listeAddBtn').addEventListener('click', () => {
     const input = document.getElementById('listeNewName');
     const val = input.value.trim();
