@@ -1185,7 +1185,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-10-02 10h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-10-03 10h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -3071,6 +3071,29 @@ function upsertRdv(rec){
   );
 }
 
+// Relit les rendez-vous depuis l'onglet "Rendez-vous parents" du Sheet (faits depuis un
+// autre appareil ou saisis à la main) et les fusionne avec ceux de cet appareil.
+async function syncRdvFromSheet(){
+  const rows = await sheetGetRows('Rendez-vous parents');
+  if (!rows || rows.length <= 1) return;
+  const store = loadRdvStore();
+  const key = r => `${r.date}|${r.eleve}`;
+  const known = new Map(store.map(r => [key(r), r]));
+  let changed = false;
+  rows.slice(1).forEach(r => {
+    const [dateRaw, eleve, personnes, motif, compteRendu, actions] = r;
+    const date = normalizeDateStr(dateRaw);
+    if (!date || !eleve) return;
+    const rec = { date, eleve, personnes: personnes || '', motif: motif || '', compteRendu: compteRendu || '', actions: actions || '' };
+    const existing = known.get(key(rec));
+    if (!existing || JSON.stringify(existing) !== JSON.stringify(rec)){
+      known.set(key(rec), rec);
+      changed = true;
+    }
+  });
+  if (changed) saveRdvStore(Array.from(known.values()));
+}
+
 function buildRdvSection(student){
   const block = document.createElement('div');
   block.className = 'discipline-group';
@@ -3158,33 +3181,63 @@ function buildRdvSection(student){
   form.appendChild(btnRow);
   inner.appendChild(form);
 
-  // Historique des rendez-vous précédents (hors celui du jour en cours d'édition)
-  const previous = store.filter(r => r.date !== dateInput.value);
-  if (previous.length > 0){
-    const histTitle = document.createElement('div');
-    histTitle.className = 'rdv-hist-title';
-    histTitle.textContent = 'Historique';
-    inner.appendChild(histTitle);
-    previous.forEach(r => {
-      const line = document.createElement('div');
-      line.className = 'rdv-hist-line';
-      line.innerHTML = `<strong>${r.date}</strong>${r.personnes ? ' — ' + r.personnes : ''}${r.motif ? ' — ' + r.motif : ''}`;
-      if (r.compteRendu){
-        const cr = document.createElement('div');
-        cr.className = 'rdv-hist-detail';
-        cr.textContent = r.compteRendu;
-        line.appendChild(cr);
-      }
-      if (r.actions){
-        const ac = document.createElement('div');
-        ac.className = 'rdv-hist-detail';
-        ac.style.fontStyle = 'italic';
-        ac.textContent = 'Actions : ' + r.actions;
-        line.appendChild(ac);
-      }
-      inner.appendChild(line);
+  // Notes des autres rendez-vous de l'année scolaire pour cet élève (du plus récent au
+  // plus ancien), avec un bouton pour rouvrir l'un d'eux dans le formulaire ci-dessus.
+  const previous = store.filter(r => r.date !== dateInput.value && r.date >= APPEL_START_DATE);
+  const histTitle = document.createElement('div');
+  histTitle.className = 'rdv-hist-title';
+  histTitle.textContent = previous.length
+    ? `Autres rendez-vous de l'année (${previous.length})`
+    : "Autres rendez-vous de l'année : aucun pour l'instant";
+  inner.appendChild(histTitle);
+  previous.forEach(r => {
+    const line = document.createElement('div');
+    line.className = 'rdv-hist-line';
+
+    const head = document.createElement('div');
+    head.style.display = 'flex';
+    head.style.justifyContent = 'space-between';
+    head.style.alignItems = 'baseline';
+    head.style.gap = '8px';
+    const title = document.createElement('span');
+    const strong = document.createElement('strong');
+    strong.textContent = dayLabelFr(r.date);
+    title.appendChild(strong);
+    title.appendChild(document.createTextNode((r.personnes ? ' — ' + r.personnes : '') + (r.motif ? ' — ' + r.motif : '')));
+    head.appendChild(title);
+    const openBtn = document.createElement('button');
+    openBtn.textContent = 'Rouvrir';
+    openBtn.className = 'rdv-btn';
+    openBtn.style.padding = '3px 8px';
+    openBtn.style.flexShrink = '0';
+    openBtn.addEventListener('click', () => {
+      dateInput.value = r.date;
+      personnesInput.value = r.personnes || '';
+      motifInput.value = r.motif || '';
+      compteRenduTa.value = r.compteRendu || '';
+      actionsTa.value = r.actions || '';
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-  }
+    head.appendChild(openBtn);
+    line.appendChild(head);
+
+    if (r.compteRendu){
+      const cr = document.createElement('div');
+      cr.className = 'rdv-hist-detail';
+      cr.style.whiteSpace = 'pre-wrap';
+      cr.textContent = r.compteRendu;
+      line.appendChild(cr);
+    }
+    if (r.actions){
+      const ac = document.createElement('div');
+      ac.className = 'rdv-hist-detail';
+      ac.style.fontStyle = 'italic';
+      ac.style.whiteSpace = 'pre-wrap';
+      ac.textContent = 'Actions : ' + r.actions;
+      line.appendChild(ac);
+    }
+    inner.appendChild(line);
+  });
 
   block.appendChild(inner);
   return block;
@@ -4803,7 +4856,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       refreshProgressionData().then(ok => { if (ok) renderEvaluations(document.getElementById('evalDate').value); });
     }
     if (btn.dataset.tab === 'suivi'){
-      Promise.all([syncEvalFromSheet(), syncComportFromSheet(), syncObsFromSheet(), syncMissionsFromSheet()]).then(renderSuivi);
+      Promise.all([syncEvalFromSheet(), syncComportFromSheet(), syncObsFromSheet(), syncMissionsFromSheet(), syncRdvFromSheet()]).then(renderSuivi);
       renderSuivi();
     }
     if (btn.dataset.tab === 'observations'){
