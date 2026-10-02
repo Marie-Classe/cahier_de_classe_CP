@@ -592,6 +592,21 @@
     color: var(--ink);
     cursor: pointer;
   }
+  .rdv-btn.recording-active{
+    background: var(--mission);
+    color: white;
+    border-color: var(--mission);
+    animation: pulse-rec 1s infinite;
+  }
+  .rdv-btn:disabled{ opacity: 0.6; cursor: wait; }
+  .rdv-interim{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    min-height: 1em;
+    margin-top: 3px;
+  }
   .rdv-btn-primary{
     background: var(--ink);
     color: white;
@@ -1185,7 +1200,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-10-03 10h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-10-03 12h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -3049,6 +3064,7 @@ function populateSuiviFilters(student){
 
 // ---------- Rendez-vous parents ----------
 const RDV_STORAGE_KEY = 'cahier_de_classe_rdv_v1';
+const RDV_SYNTHESE_API_URL = 'https://cahier-de-classe-cp.vercel.app/api/rdv-synthese';
 function loadRdvStore(){
   try{ return JSON.parse(localStorage.getItem(RDV_STORAGE_KEY) || '[]'); }
   catch(e){ return []; }
@@ -3063,10 +3079,10 @@ function upsertRdv(rec){
   if (idx >= 0) store[idx] = rec; else store.push(rec);
   saveRdvStore(store);
   // colonnes du Sheet (onglet "Rendez-vous parents") :
-  // Date, Élève, Personnes présentes, Motif, Compte rendu, Actions à mettre en place
+  // Date, Élève, Personnes présentes, Motif, Compte rendu, Actions à mettre en place, Transcription
   sheetSaveRow(
     'Rendez-vous parents',
-    [rec.date, rec.eleve, rec.personnes || '', rec.motif || '', rec.compteRendu || '', rec.actions || ''],
+    [rec.date, rec.eleve, rec.personnes || '', rec.motif || '', rec.compteRendu || '', rec.actions || '', rec.transcription || ''],
     [0, 1]
   );
 }
@@ -3081,10 +3097,10 @@ async function syncRdvFromSheet(){
   const known = new Map(store.map(r => [key(r), r]));
   let changed = false;
   rows.slice(1).forEach(r => {
-    const [dateRaw, eleve, personnes, motif, compteRendu, actions] = r;
+    const [dateRaw, eleve, personnes, motif, compteRendu, actions, transcription] = r;
     const date = normalizeDateStr(dateRaw);
     if (!date || !eleve) return;
-    const rec = { date, eleve, personnes: personnes || '', motif: motif || '', compteRendu: compteRendu || '', actions: actions || '' };
+    const rec = { date, eleve, personnes: personnes || '', motif: motif || '', compteRendu: compteRendu || '', actions: actions || '', transcription: transcription || '' };
     const existing = known.get(key(rec));
     if (!existing || JSON.stringify(existing) !== JSON.stringify(rec)){
       known.set(key(rec), rec);
@@ -3105,7 +3121,7 @@ function buildRdvSection(student){
 
   const store = loadRdvStore().filter(r => r.eleve === student).sort((a,b) => b.date.localeCompare(a.date));
   const existingToday = store.find(r => r.date === fmtDate(new Date()));
-  const current = existingToday || { eleve: student, date: fmtDate(new Date()), personnes: '', motif: '', compteRendu: '', actions: '' };
+  const current = existingToday || { eleve: student, date: fmtDate(new Date()), personnes: '', motif: '', transcription: '', compteRendu: '', actions: '' };
 
   const form = document.createElement('div');
   form.className = 'rdv-form';
@@ -3138,8 +3154,167 @@ function buildRdvSection(student){
 
   const personnesInput = labeledField('Personnes présentes', 'input', current.personnes, 'Ex. Mère, Père…');
   const motifInput = labeledField('Motif', 'input', current.motif, 'Ex. Bilan de mi-période');
+  // --- Transcription des propos oraux (dictée vocale) puis résumé par l'IA ---
+  const transcriptionTa = labeledField('Transcription de la conversation', 'textarea', current.transcription,
+    "Appuie sur 🎙️ pour transcrire la conversation à voix haute, ou écris/colle le texte ici…");
+  transcriptionTa.style.minHeight = '90px';
+  const interimEl = document.createElement('div');
+  interimEl.className = 'rdv-interim';
+  transcriptionTa.parentNode.appendChild(interimEl);
+
+  const recRow = document.createElement('div');
+  recRow.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px;';
+  const micBtn = document.createElement('button');
+  micBtn.className = 'rdv-btn';
+  micBtn.textContent = '🎙️ Transcrire la conversation';
+  const sumBtn = document.createElement('button');
+  sumBtn.className = 'rdv-btn rdv-btn-primary';
+  sumBtn.textContent = '✨ Résumer et proposer les actions';
+  recRow.appendChild(micBtn);
+  recRow.appendChild(sumBtn);
+  form.appendChild(recRow);
+
   const compteRenduTa = labeledField('Compte rendu', 'textarea', current.compteRendu, 'Ce qui a été dit, observé, décidé…');
+  compteRenduTa.style.minHeight = '140px';
   const actionsTa = labeledField('Actions à mettre en place', 'textarea', current.actions, 'Ce qui doit être fait ensuite (apparaîtra dans APC)…');
+  actionsTa.style.minHeight = '80px';
+
+  function currentRdvRecord(){
+    return {
+      eleve: student,
+      date: dateInput.value,
+      personnes: personnesInput.value.trim(),
+      motif: motifInput.value.trim(),
+      transcription: transcriptionTa.value.trim(),
+      compteRendu: compteRenduTa.value.trim(),
+      actions: actionsTa.value.trim()
+    };
+  }
+
+  // Dictée vocale (reconnaissance vocale du navigateur, en français). Sur un navigateur
+  // sans reconnaissance vocale, repli : enregistrement audio téléchargé sur l'appareil.
+  let dictMode = null;      // null | 'dictee' | 'audio'
+  let recognition = null;
+  let mediaRec = null;
+  let mediaChunks = [];
+  function setMicUi(active){
+    micBtn.classList.toggle('recording-active', active);
+    micBtn.textContent = active ? '⏹ Arrêter la transcription' : '🎙️ Transcrire la conversation';
+  }
+  function appendTranscript(text){
+    const t = text.trim();
+    if (!t) return;
+    const cur = transcriptionTa.value;
+    transcriptionTa.value = cur + (cur && !/\s$/.test(cur) ? ' ' : '') + t;
+  }
+  function stopDictation(){
+    const mode = dictMode;
+    dictMode = null;
+    interimEl.textContent = '';
+    setMicUi(false);
+    if (mode === 'dictee'){
+      try{ recognition && recognition.stop(); }catch(e){}
+      if (transcriptionTa.value.trim()){
+        upsertRdv(currentRdvRecord()); // sauvegarde de sécurité de la transcription
+        showToast('Transcription enregistrée. Appuie sur ✨ pour générer le résumé.');
+      }
+    } else if (mode === 'audio'){
+      try{ mediaRec && mediaRec.stop(); }catch(e){}
+    }
+  }
+  async function startAudioFallback(){
+    if (!navigator.mediaDevices || !window.MediaRecorder){
+      showToast("⚠️ Ni dictée vocale ni enregistrement possibles sur ce navigateur. Utilise Chrome.");
+      return;
+    }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaChunks = [];
+      mediaRec = new MediaRecorder(stream);
+      mediaRec.ondataavailable = e => { if (e.data.size > 0) mediaChunks.push(e.data); };
+      mediaRec.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(mediaChunks, { type: mediaRec.mimeType || 'audio/webm' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `RDV-${student}-${dateInput.value}.${blob.type.includes('mp4') ? 'm4a' : 'webm'}`;
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast("Enregistrement audio téléchargé (la transcription automatique n'est pas disponible ici).");
+      };
+      mediaRec.start();
+      dictMode = 'audio';
+      setMicUi(true);
+      showToast("Enregistrement audio en cours (transcription automatique indisponible sur ce navigateur).");
+    }catch(e){
+      showToast('⚠️ Micro indisponible : ' + e.message);
+    }
+  }
+  function startDictation(){
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR){ startAudioFallback(); return; }
+    recognition = new SR();
+    recognition.lang = 'fr-FR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++){
+        const r = e.results[i];
+        if (r.isFinal) appendTranscript(r[0].transcript);
+        else interim += r[0].transcript;
+      }
+      interimEl.textContent = interim ? '… ' + interim : '';
+    };
+    recognition.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+        showToast("⚠️ Accès au micro refusé : autorise-le dans les réglages du navigateur.");
+        dictMode = null; setMicUi(false);
+      }
+    };
+    // le navigateur coupe la reconnaissance après un silence : on la relance tant que c'est actif
+    recognition.onend = () => {
+      if (dictMode === 'dictee' && form.isConnected){
+        try{ recognition.start(); }catch(e){}
+      } else if (dictMode === 'dictee'){
+        dictMode = null;
+      }
+    };
+    dictMode = 'dictee';
+    setMicUi(true);
+    try{ recognition.start(); }catch(e){ showToast('⚠️ ' + e.message); dictMode = null; setMicUi(false); }
+  }
+  micBtn.addEventListener('click', () => { if (dictMode) stopDictation(); else startDictation(); });
+
+  // Résumé organisé + actions, générés par l'IA à partir de la transcription
+  sumBtn.addEventListener('click', async () => {
+    if (dictMode) stopDictation();
+    const text = transcriptionTa.value.trim();
+    if (!text){ showToast('Rien à résumer : la transcription est vide.'); return; }
+    if ((compteRenduTa.value.trim() || actionsTa.value.trim()) &&
+        !window.confirm('Remplacer le compte rendu et les actions déjà écrits par le résumé généré ?')) return;
+    sumBtn.disabled = true;
+    sumBtn.textContent = '⏳ Résumé en cours…';
+    try{
+      const resp = await fetch(RDV_SYNTHESE_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eleve: student, date: dateInput.value, personnes: personnesInput.value.trim(), motif: motifInput.value.trim(), transcription: text })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok){
+        showToast('⚠️ Résumé impossible : ' + (data.error || resp.status));
+      } else {
+        compteRenduTa.value = data.compteRendu || '';
+        actionsTa.value = data.actions || '';
+        showToast('Résumé généré. Relis, corrige si besoin, puis appuie sur Enregistrer.');
+      }
+    }catch(e){
+      showToast('⚠️ Résumé impossible (hors-ligne ?) : ' + e.message);
+    }finally{
+      sumBtn.disabled = false;
+      sumBtn.textContent = '✨ Résumer et proposer les actions';
+    }
+  });
 
   const btnRow = document.createElement('div');
   btnRow.style.display = 'flex';
@@ -3150,14 +3325,8 @@ function buildRdvSection(student){
   saveBtn.textContent = '💾 Enregistrer';
   saveBtn.className = 'rdv-btn rdv-btn-primary';
   saveBtn.addEventListener('click', () => {
-    upsertRdv({
-      eleve: student,
-      date: dateInput.value,
-      personnes: personnesInput.value.trim(),
-      motif: motifInput.value.trim(),
-      compteRendu: compteRenduTa.value.trim(),
-      actions: actionsTa.value.trim()
-    });
+    if (dictMode) stopDictation();
+    upsertRdv(currentRdvRecord());
     showToast('Rendez-vous enregistré.');
     renderSuivi();
   });
@@ -3171,6 +3340,7 @@ function buildRdvSection(student){
       `Rendez-vous parents — ${student} — ${dateInput.value}`,
       `Personnes présentes : ${personnesInput.value.trim()}`,
       `Motif : ${motifInput.value.trim()}`,
+      `Transcription : ${transcriptionTa.value.trim()}`,
       `Compte rendu : ${compteRenduTa.value.trim()}`,
       `Actions à mettre en place : ${actionsTa.value.trim()}`
     ].join('\n');
@@ -3214,6 +3384,7 @@ function buildRdvSection(student){
       dateInput.value = r.date;
       personnesInput.value = r.personnes || '';
       motifInput.value = r.motif || '';
+      transcriptionTa.value = r.transcription || '';
       compteRenduTa.value = r.compteRendu || '';
       actionsTa.value = r.actions || '';
       form.scrollIntoView({ behavior: 'smooth', block: 'start' });
