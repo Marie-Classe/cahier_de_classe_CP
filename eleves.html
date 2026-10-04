@@ -2,437 +2,103 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>Mon travail</title>
+<title>Codes secrets des élèves</title>
 <style>
-  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-  html, body{ margin:0; height:100%; }
-  body{
-    font-family: "Trebuchet MS", "Comic Sans MS", system-ui, sans-serif;
-    background: #FFF6E5;
-    color: #2E2A24;
-    user-select: none; -webkit-user-select: none;
-    overflow-x: hidden;
+  body{ font-family: -apple-system, "Segoe UI", sans-serif; margin:0; padding:18px; background:#FBF7EF; color:#2E2A24; }
+  h1{ font-size:1.3rem; margin:0 0 6px; }
+  p{ font-size:0.9rem; line-height:1.45; max-width:760px; }
+  button{ font:inherit; padding:10px 16px; border-radius:10px; border:1px solid #2E2A24; background:#2E2A24; color:white; cursor:pointer; margin:4px 6px 4px 0; }
+  button.secondary{ background:white; color:#2E2A24; }
+  .warn{ background:#FFF3DE; border:1px solid #C9A94C; border-radius:10px; padding:10px 14px; }
+  #cards{ display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px; margin:16px 0; }
+  .card{ background:white; border:2px dashed #BBB; border-radius:14px; padding:10px; text-align:center; break-inside:avoid; }
+  .card .name{ font-weight:700; font-size:1.05rem; }
+  .card .pics{ font-size:2.4rem; letter-spacing:6px; margin-top:4px; }
+  textarea{ width:100%; max-width:760px; height:150px; font-family:monospace; font-size:0.78rem; }
+  .legend{ font-size:1.4rem; }
+  @media print{
+    body{ background:white; padding:0; }
+    .noprint{ display:none !important; }
+    #cards{ grid-template-columns: repeat(3, 1fr); }
   }
-  .screen{ display:none; min-height:100%; padding:16px; }
-  .screen.active{ display:flex; flex-direction:column; align-items:center; justify-content:center; }
-
-  /* ---- Écran 1 : les prénoms ---- */
-  #screenNames.active{ justify-content:flex-start; }
-  #names{
-    width:100%; max-width:1000px;
-    display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;
-  }
-  @media (min-width: 700px){ #names{ grid-template-columns: repeat(4, 1fr); gap:16px; } }
-  @media (min-width: 1000px){ #names{ grid-template-columns: repeat(6, 1fr); } }
-  .name-tile{
-    border:none; border-radius:22px; padding:14px 6px 12px;
-    display:flex; flex-direction:column; align-items:center; gap:4px;
-    font-family:inherit; font-size: clamp(1rem, 3.6vw, 1.5rem); font-weight:700; color:#2E2A24;
-    box-shadow: 0 4px 0 rgba(0,0,0,0.12);
-    cursor:pointer;
-  }
-  .name-tile .emoji{ font-size: clamp(2rem, 9vw, 3.4rem); line-height:1.1; }
-  .name-tile:active{ transform: translateY(3px); box-shadow:none; }
-
-  /* ---- Écran 2 : photo ou micro ---- */
-  #screenChoice{ gap:18px; }
-  .who{ text-align:center; font-size: clamp(1.8rem, 8vw, 3rem); font-weight:800; }
-  .who .emoji{ display:block; font-size: clamp(3rem, 14vw, 5rem); }
-  .choices{ display:flex; gap:18px; width:100%; max-width:700px; justify-content:center; }
-  .big-btn{
-    flex:1; aspect-ratio:1/1; max-width:320px;
-    border:none; border-radius:32px; cursor:pointer;
-    font-size: clamp(4rem, 20vw, 8rem); line-height:1;
-    box-shadow: 0 8px 0 rgba(0,0,0,0.15);
-    display:flex; align-items:center; justify-content:center;
-  }
-  .big-btn:active{ transform: translateY(6px); box-shadow:none; }
-  #btnPhoto{ background:#9FD8FF; }
-  #btnAudio{ background:#FFB3C1; }
-  .back-btn{
-    position:fixed; top:12px; left:12px;
-    width:64px; height:64px; border-radius:50%; border:none; cursor:pointer;
-    background:white; font-size:2rem; box-shadow:0 3px 0 rgba(0,0,0,0.15);
-  }
-
-  .name-tile.locked{ opacity:0.45; position:relative; }
-  .name-tile.locked::after{ content:"🔒"; position:absolute; top:6px; right:8px; font-size:1.4rem; }
-
-  /* ---- Écran code secret (3 images) ---- */
-  #screenCode{ gap:14px; }
-  .dots{ display:flex; gap:14px; height:44px; align-items:center; }
-  .dot{ width:30px; height:30px; border-radius:50%; background:#D9D2C3; }
-  .dot.on{ background:#2E7D32; }
-  .code-grid{
-    display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;
-    width: min(92vw, 460px);
-  }
-  .code-pic{
-    aspect-ratio:1/1; border:none; border-radius:24px; background:white; cursor:pointer;
-    font-size: clamp(3rem, 15vw, 5.5rem); line-height:1;
-    box-shadow: 0 5px 0 rgba(0,0,0,0.14);
-    display:flex; align-items:center; justify-content:center;
-  }
-  .code-pic:active{ transform: translateY(4px); box-shadow:none; }
-  .code-grid.wrong{ animation: shake 0.45s; }
-  @keyframes shake{ 0%,100%{ transform:translateX(0);} 20%,60%{ transform:translateX(-14px);} 40%,80%{ transform:translateX(14px);} }
-  #codeMsg{ min-height:1.2em; font-size:0.9rem; color:#6B1010; text-align:center; max-width:460px; }
-
-  /* ---- Écran enregistrement ---- */
-  #screenRecording{ background:#FFE3E3; gap:22px; }
-  #btnStop{
-    width: min(70vw, 340px); aspect-ratio:1/1; border-radius:50%; border:none; cursor:pointer;
-    background:#E53935; color:white; font-size: clamp(5rem, 24vw, 9rem); line-height:1;
-    display:flex; align-items:center; justify-content:center;
-    animation: pulse 1.1s infinite;
-  }
-  @keyframes pulse{ 0%,100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(229,57,53,0.5);} 50%{ transform:scale(1.04); box-shadow:0 0 0 28px rgba(229,57,53,0);} }
-  #timer{ font-size:2rem; font-weight:800; font-variant-numeric: tabular-nums; }
-
-  /* ---- Envoi / résultat ---- */
-  .huge{ font-size: clamp(6rem, 30vw, 12rem); line-height:1; text-align:center; }
-  .spin{ animation: spin 1.2s linear infinite; display:inline-block; }
-  @keyframes spin{ to{ transform: rotate(360deg);} }
-  #screenResult.ok{ background:#DFF5DD; }
-  #screenResult.ko{ background:#FFE3E3; }
-  #errText{ font-size:0.95rem; max-width:520px; text-align:center; margin:6px 0 14px; color:#6B1010; }
-  #retryBtn{ display:none; padding:12px 22px; font-size:2.4rem; border:none; border-radius:20px; background:white; cursor:pointer; box-shadow:0 4px 0 rgba(0,0,0,0.15); }
 </style>
 </head>
 <body>
-
-<!-- Écran 1 : je clique sur mon prénom -->
-<div id="screenNames" class="screen active">
-  <div id="names"></div>
-</div>
-
-<!-- Écran 1 bis : mon code secret (3 images) -->
-<div id="screenCode" class="screen">
-  <button class="back-btn" id="codeBackBtn" aria-label="Retour">⬅️</button>
-  <div class="who"><span class="emoji" id="codeEmoji"></span><span id="codeName"></span></div>
-  <div class="dots" id="codeDots"></div>
-  <div class="code-grid" id="codeGrid"></div>
-  <div id="codeMsg"></div>
-</div>
-
-<!-- Écran 2 : je choisis photo ou micro -->
-<div id="screenChoice" class="screen">
-  <button class="back-btn" id="backBtn" aria-label="Retour">⬅️</button>
-  <div class="who"><span class="emoji" id="whoEmoji"></span><span id="whoName"></span></div>
-  <div class="choices">
-    <button class="big-btn" id="btnPhoto" aria-label="Prendre une photo">📷</button>
-    <button class="big-btn" id="btnAudio" aria-label="M'enregistrer">🎤</button>
+<div class="noprint">
+  <h1>🔑 Codes secrets des élèves</h1>
+  <p>Chaque élève reçoit <b>3 images</b> à toucher dans l'ordre pour ouvrir son espace. Cette page tire les codes au hasard dans ton navigateur : <b>rien n'est enregistré ni envoyé nulle part</b>. Si tu la recharges, tu obtiens d'autres codes.</p>
+  <div class="warn">
+    <b>À faire avant de recharger la page :</b>
+    1) imprime les cartes (une par élève, à découper) ;
+    2) copie le texte ci-dessous dans la variable Vercel <code>CODES_ELEVES</code>, puis redéploie.
   </div>
+  <p>
+    <button id="gen">🎲 Tirer de nouveaux codes</button>
+    <button id="print" class="secondary">🖨️ Imprimer les cartes</button>
+    <button id="copy" class="secondary">📋 Copier le texte pour Vercel</button>
+  </p>
 </div>
 
-<!-- Écran 3 : j'enregistre ma voix -->
-<div id="screenRecording" class="screen">
-  <div class="who"><span class="emoji" id="recEmoji"></span></div>
-  <button id="btnStop" aria-label="Arrêter">⏹️</button>
-  <div id="timer">0:00</div>
-</div>
+<div id="cards"></div>
 
-<!-- Écran 4 : envoi -->
-<div id="screenSending" class="screen">
-  <div class="huge"><span class="spin">⏳</span></div>
+<div class="noprint">
+  <p><b>Texte à coller dans Vercel</b> (variable <code>CODES_ELEVES</code>) :</p>
+  <textarea id="json" readonly></textarea>
+  <p>Correspondance chiffre ↔ image (pour corriger un code à la main) :<br>
+     <span class="legend" id="legend"></span></p>
 </div>
-
-<!-- Écran 5 : résultat -->
-<div id="screenResult" class="screen">
-  <div class="huge" id="resultIcon"></div>
-  <div id="errText"></div>
-  <button id="retryBtn" aria-label="Recommencer">🔁</button>
-</div>
-
-<input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none;">
 
 <script>
-// Liste des élèves et leur animal (un repère visuel pour ceux qui ne lisent pas encore).
-// Pour ajouter un élève : ajoute son prénom ici (et dans api/photo-upload.js).
 const STUDENTS = ["Arielle","Augustin","Aurélien","Charlie","Charly","Eden","Eris","Hank","Ilan","Iris","Isaiah","Louis","Lyam","Léa","Maël","Nella","Octavia","Olympe","Pablo","Raphaël","Tessa","Thaïs","Thibault","Théo","Yoko","Yüna","Zélie"];
-const ANIMAUX = {
-  "Arielle":"🦄","Augustin":"🐻","Aurélien":"🦁","Charlie":"🐶","Charly":"🐱","Eden":"🐰","Eris":"🦊","Hank":"🐼",
-  "Ilan":"🐯","Iris":"🦋","Isaiah":"🐸","Louis":"🐧","Lyam":"🐬","Léa":"🐢","Maël":"🐙","Nella":"🦆",
-  "Octavia":"🦉","Olympe":"🐹","Pablo":"🐴","Raphaël":"🐘","Tessa":"🐨","Thaïs":"🐞","Thibault":"🦒","Théo":"🐮",
-  "Yoko":"🐠","Yüna":"🐔","Zélie":"🐝"
-};
-const COULEURS = ["#FFD6A5","#CAFFBF","#9BF6FF","#BDB2FF","#FFC6FF","#FDFFB6","#A0C4FF","#FFADAD"];
-const API_URL = '/api/photo-upload';   // même serveur que l'application de la maîtresse
-const MAX_AUDIO_SECONDS = 180;         // arrêt automatique après 3 minutes
-
-// Images du code secret. L'ordre compte : il doit rester identique dans codes.html.
+// Même liste, dans le même ordre, que dans eleves.html
 const CODE_IMAGES = ['🍎','🚗','⭐','🌙','🌳','🎈','⚽','🍦','🔔'];
 const CODE_LENGTH = 3;
-const MAX_FAILS = 3, LOCK_MS = 60000;
-let current = null;           // prénom de l'élève
-let currentCode = '';         // code validé par le serveur pour cet élève (chiffres 0 à 8)
-let entered = [];
-const failures = {}, lockedUntil = {};
-let mediaRec = null, mediaStream = null, chunks = [], timerId = null, autoStopId = null, startedAt = 0;
-let returnTimer = null;
 
-function show(id){
-  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
-  window.scrollTo(0, 0);
+let codes = {};
+function randomInt(n){
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % n;
 }
-function today(){
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function newCode(){
+  const pool = CODE_IMAGES.map((_, i) => i);
+  let out = '';
+  for (let k = 0; k < CODE_LENGTH; k++){ out += pool.splice(randomInt(pool.length), 1)[0]; }  // 3 images différentes
+  return out;
 }
-function emojiOf(name){ return ANIMAUX[name] || '⭐'; }
-
-function buildNames(){
-  const box = document.getElementById('names');
-  STUDENTS.forEach((name, i) => {
-    const b = document.createElement('button');
-    b.className = 'name-tile';
-    b.style.background = COULEURS[i % COULEURS.length];
-    b.dataset.name = name;
-    b.innerHTML = `<span class="emoji">${emojiOf(name)}</span><span></span>`;
-    b.lastChild.textContent = name;
-    b.addEventListener('click', () => chooseStudent(name));
-    box.appendChild(b);
+function generate(){
+  codes = {};
+  const used = new Set();
+  STUDENTS.forEach(name => {
+    let c; do { c = newCode(); } while (used.has(c));   // deux élèves n'ont jamais le même code
+    used.add(c); codes[name] = c;
   });
+  render();
 }
-function isLocked(name){ return (lockedUntil[name] || 0) > Date.now(); }
-function refreshLocks(){
-  document.querySelectorAll('.name-tile').forEach(t => t.classList.toggle('locked', isLocked(t.dataset.name)));
-}
-setInterval(refreshLocks, 1000);
-
-function chooseStudent(name){
-  if (isLocked(name)) return;
-  current = name;
-  currentCode = '';
-  showCodeScreen();
-}
-function goHome(){
-  clearTimeout(returnTimer);
-  current = null;
-  currentCode = '';
-  entered = [];
-  show('screenNames');
-  refreshLocks();
-}
-
-// ---- Code secret : 3 images à toucher dans l'ordre ----
-function shuffled(arr){
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a;
-}
-function renderDots(){
-  const box = document.getElementById('codeDots');
-  box.innerHTML = '';
-  for (let i = 0; i < CODE_LENGTH; i++){
-    const d = document.createElement('span');
-    d.className = 'dot' + (i < entered.length ? ' on' : '');
-    box.appendChild(d);
-  }
-}
-function showCodeScreen(){
-  entered = [];
-  document.getElementById('codeEmoji').textContent = emojiOf(current);
-  document.getElementById('codeName').textContent = current;
-  document.getElementById('codeMsg').textContent = '';
-  const grid = document.getElementById('codeGrid');
-  grid.classList.remove('wrong');
-  grid.innerHTML = '';
-  // les images changent de place à chaque essai : impossible de copier un code "à la position"
-  shuffled(CODE_IMAGES.map((img, idx) => ({ img, idx }))).forEach(({ img, idx }) => {
-    const b = document.createElement('button');
-    b.className = 'code-pic';
-    b.textContent = img;
-    b.dataset.idx = idx;
-    b.addEventListener('click', () => tapCodePicture(idx));
-    grid.appendChild(b);
+function render(){
+  const cards = document.getElementById('cards');
+  cards.innerHTML = '';
+  STUDENTS.forEach(name => {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = '<div class="name"></div><div class="pics"></div>';
+    d.querySelector('.name').textContent = name;
+    d.querySelector('.pics').textContent = codes[name].split('').map(i => CODE_IMAGES[+i]).join(' ');
+    cards.appendChild(d);
   });
-  renderDots();
-  show('screenCode');
+  document.getElementById('json').value = JSON.stringify(codes);
 }
-async function tapCodePicture(idx){
-  if (entered.length >= CODE_LENGTH) return;
-  entered.push(idx);
-  renderDots();
-  if (entered.length < CODE_LENGTH) return;
-  const code = entered.join('');
-  const grid = document.getElementById('codeGrid');
-  grid.style.pointerEvents = 'none';
-  try{
-    const resp = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'check', eleve: current, code })
-    });
-    const data = await resp.json().catch(() => ({}));
-    grid.style.pointerEvents = '';
-    if (resp.ok && data.ok){
-      currentCode = code;
-      failures[current] = 0;
-      document.getElementById('whoEmoji').textContent = emojiOf(current);
-      document.getElementById('whoName').textContent = current;
-      show('screenChoice');
-      return;
-    }
-    if (resp.status !== 401){
-      document.getElementById('codeMsg').textContent = data.error || ('Erreur ' + resp.status);
-      entered = []; renderDots();
-      return;
-    }
-    // mauvais code
-    failures[current] = (failures[current] || 0) + 1;
-    grid.classList.add('wrong');
-    document.getElementById('codeMsg').textContent = '❌';
-    setTimeout(() => {
-      if (failures[current] >= MAX_FAILS){
-        lockedUntil[current] = Date.now() + LOCK_MS;
-        failures[current] = 0;
-        goHome();
-      } else {
-        showCodeScreen();
-      }
-    }, 650);
-  }catch(e){
-    grid.style.pointerEvents = '';
-    document.getElementById('codeMsg').textContent = 'Pas de connexion : ' + e.message;
-    entered = []; renderDots();
-  }
-}
-document.getElementById('codeBackBtn').addEventListener('click', goHome);
-
-// ---- Résultat ----
-function showResult(ok, message){
-  clearTimeout(returnTimer);
-  const screen = document.getElementById('screenResult');
-  screen.className = 'screen active ' + (ok ? 'ok' : 'ko');
-  document.querySelectorAll('.screen').forEach(s => { if (s !== screen) s.classList.remove('active'); });
-  document.getElementById('resultIcon').textContent = ok ? '✅' : '❌';
-  document.getElementById('errText').textContent = ok ? '' : (message || '');
-  document.getElementById('retryBtn').style.display = ok ? 'none' : 'inline-block';
-  if (ok) returnTimer = setTimeout(goHome, 2500);
-}
-screenResultTap();
-function screenResultTap(){
-  document.getElementById('screenResult').addEventListener('click', e => {
-    if (e.target.id === 'retryBtn') return;
-    if (document.getElementById('screenResult').classList.contains('ok')) goHome();
-  });
-}
-
-// ---- Envoi vers Drive (même endroit que les photos de la maîtresse) ----
-async function upload(filename, mimeType, base64){
-  show('screenSending');
-  try{
-    const resp = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eleve: current, filename, mimeType, base64, source: 'eleve', code: currentCode })
-    });
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok || !data.ok){ showResult(false, data.error || ('Erreur ' + resp.status)); return; }
-    showResult(true);
-  }catch(e){
-    showResult(false, "Pas de connexion : " + e.message);
-  }
-}
-
-// ---- Photo ----
-function compressImageToBase64(file, maxDim, quality){
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = e => { img.src = e.target.result; };
-    reader.onerror = reject;
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > maxDim || height > maxDim){
-        const k = maxDim / Math.max(width, height);
-        width = Math.round(width * k); height = Math.round(height * k);
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
-    };
-    img.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-document.getElementById('btnPhoto').addEventListener('click', () => document.getElementById('photoInput').click());
-document.getElementById('photoInput').addEventListener('change', async (e) => {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (!file || !current) return;
-  show('screenSending');
-  try{
-    const base64 = await compressImageToBase64(file, 1600, 0.75);
-    await upload(`${current}-${today()}-photo-eleve.jpg`, 'image/jpeg', base64);
-  }catch(err){
-    showResult(false, "Photo illisible : " + err.message);
-  }
+document.getElementById('legend').textContent = CODE_IMAGES.map((img, i) => `${i} = ${img}`).join('   ');
+document.getElementById('gen').addEventListener('click', () => { if (confirm("Tirer de nouveaux codes ? Les codes actuels (et les cartes déjà imprimées) ne seront plus valables avec ce nouveau texte.")) generate(); });
+document.getElementById('print').addEventListener('click', () => window.print());
+document.getElementById('copy').addEventListener('click', async () => {
+  const ta = document.getElementById('json');
+  try{ await navigator.clipboard.writeText(ta.value); alert('Copié. Colle-le dans la variable CODES_ELEVES de Vercel.'); }
+  catch(e){ ta.select(); document.execCommand('copy'); alert('Copié.'); }
 });
-
-// ---- Audio ----
-function blobToBase64(blob){
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1]);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-function stopTimers(){ clearInterval(timerId); clearTimeout(autoStopId); }
-async function startRecording(){
-  if (!navigator.mediaDevices || !window.MediaRecorder){
-    showResult(false, "Ce navigateur ne permet pas d'enregistrer le son. Utilise Chrome ou Safari à jour.");
-    return;
-  }
-  try{
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  }catch(e){
-    showResult(false, "Le micro est bloqué : autorise-le dans les réglages du navigateur. (" + e.message + ")");
-    return;
-  }
-  chunks = [];
-  mediaRec = new MediaRecorder(mediaStream);
-  mediaRec.ondataavailable = ev => { if (ev.data && ev.data.size > 0) chunks.push(ev.data); };
-  mediaRec.onstop = async () => {
-    stopTimers();
-    mediaStream.getTracks().forEach(t => t.stop());
-    const type = (mediaRec.mimeType || 'audio/webm');
-    const blob = new Blob(chunks, { type });
-    const ext = type.includes('mp4') ? 'm4a' : (type.includes('ogg') ? 'ogg' : 'webm');
-    try{
-      const base64 = await blobToBase64(blob);
-      await upload(`${current}-${today()}-audio-eleve.${ext}`, type, base64);
-    }catch(err){
-      showResult(false, "Enregistrement illisible : " + err.message);
-    }
-  };
-  document.getElementById('recEmoji').textContent = emojiOf(current);
-  document.getElementById('timer').textContent = '0:00';
-  show('screenRecording');
-  mediaRec.start();
-  startedAt = Date.now();
-  timerId = setInterval(() => {
-    const s = Math.floor((Date.now() - startedAt) / 1000);
-    document.getElementById('timer').textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
-  }, 250);
-  autoStopId = setTimeout(stopRecording, MAX_AUDIO_SECONDS * 1000);
-}
-function stopRecording(){
-  if (mediaRec && mediaRec.state === 'recording') mediaRec.stop();
-}
-document.getElementById('btnAudio').addEventListener('click', startRecording);
-document.getElementById('btnStop').addEventListener('click', stopRecording);
-
-document.getElementById('backBtn').addEventListener('click', goHome);
-document.getElementById('retryBtn').addEventListener('click', () => { if (current) show('screenChoice'); else goHome(); });
-
-buildNames();
+generate();
 </script>
 </body>
 </html>
