@@ -40,7 +40,7 @@
 <body>
 <div class="noprint">
   <h1>🔑 Codes secrets des élèves</h1>
-  <p>Chaque élève reçoit <b>3 images</b> à toucher dans l'ordre pour ouvrir son espace. Cette page tire les codes au hasard dans ton navigateur : <b>rien n'est enregistré ni envoyé nulle part</b>. Si tu la recharges, tu obtiens d'autres codes.</p>
+  <p>Chaque élève reçoit <b>2 images</b> à toucher dans l'ordre pour ouvrir son espace. Cette page tire les codes au hasard dans ton navigateur : <b>rien n'est enregistré ni envoyé nulle part</b>. Si tu la recharges, tu obtiens d'autres codes.</p>
   <div class="warn">
     <b>À faire avant de recharger la page :</b>
     1) imprime les cartes (une par élève, à découper) ;
@@ -58,7 +58,7 @@
 <div id="modal" class="noprint">
   <div id="modalBox">
     <h2 id="modalTitle"></h2>
-    <p style="margin:0">Touche les 3 images, dans l'ordre :</p>
+    <p style="margin:0">Touche les 2 images, dans l'ordre :</p>
     <div id="slots"></div>
     <div id="picGrid"></div>
     <button id="modalOk">✅ Valider</button>
@@ -81,7 +81,7 @@
 const STUDENTS = ["Arielle","Augustin","Aurélien","Charlie","Charly","Eden","Eris","Hank","Ilan","Iris","Isaiah","Louis","Lyam","Léa","Maël","Nella","Octavia","Olympe","Pablo","Raphaël","Tessa","Thaïs","Thibault","Théo","Yoko","Yüna","Zélie"];
 // Même liste, dans le même ordre, que dans eleves.html
 const CODE_IMAGES = ['🍎','🚗','⭐','🌙','🌳','🎈','⚽','🍦','🔔'];
-const CODE_LENGTH = 3;
+const CODE_LENGTH = 2;   // nombre d'images à toucher (même valeur dans eleves.html)
 
 let codes = {};
 function randomInt(n){
@@ -92,7 +92,7 @@ function randomInt(n){
 function newCode(){
   const pool = CODE_IMAGES.map((_, i) => i);
   let out = '';
-  for (let k = 0; k < CODE_LENGTH; k++){ out += pool.splice(randomInt(pool.length), 1)[0]; }  // 3 images différentes
+  for (let k = 0; k < CODE_LENGTH; k++){ out += pool.splice(randomInt(pool.length), 1)[0]; }  // des images toutes différentes
   return out;
 }
 let edited = new Set();   // élèves dont le code a été modifié à la main
@@ -196,6 +196,7 @@ document.getElementById('importBtn').addEventListener('click', () => {
   render();
   let msg = `Codes chargés : ${STUDENTS.length - missing.length} repris tels quels.`;
   if (missing.length) msg += `\nNouveaux codes tirés pour : ${missing.join(', ')} (surlignés).`;
+  if (problems.length) msg += `\n${problems.length} code(s) n'ont pas la bonne longueur (${CODE_LENGTH} images) et ont été remplacés — c'est normal si ce sont les anciens codes à 3 images.`;
   if (unknown.length) msg += `\nIgnorés (prénoms inconnus) : ${unknown.join(', ')}.`;
   alert(msg);
 });
