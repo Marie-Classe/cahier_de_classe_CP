@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Codes secrets des élèves</title>
+<style>
+  body{ font-family: -apple-system, "Segoe UI", sans-serif; margin:0; padding:18px; background:#FBF7EF; color:#2E2A24; }
+  h1{ font-size:1.3rem; margin:0 0 6px; }
+  p{ font-size:0.9rem; line-height:1.45; max-width:760px; }
+  button{ font:inherit; padding:10px 16px; border-radius:10px; border:1px solid #2E2A24; background:#2E2A24; color:white; cursor:pointer; margin:4px 6px 4px 0; }
+  button.secondary{ background:white; color:#2E2A24; }
+  .warn{ background:#FFF3DE; border:1px solid #C9A94C; border-radius:10px; padding:10px 14px; }
+  #cards{ display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px; margin:16px 0; }
+  .card{ background:white; border:2px dashed #BBB; border-radius:14px; padding:10px; text-align:center; break-inside:avoid; }
+  .card .name{ font-weight:700; font-size:1.05rem; }
+  .card .pics{ font-size:2.4rem; letter-spacing:6px; margin-top:4px; }
+  textarea{ width:100%; max-width:760px; height:150px; font-family:monospace; font-size:0.78rem; }
+  .legend{ font-size:1.4rem; }
+  @media print{
+    body{ background:white; padding:0; }
+    .noprint{ display:none !important; }
+    #cards{ grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="noprint">
+  <h1>🔑 Codes secrets des élèves</h1>
+  <p>Chaque élève reçoit <b>3 images</b> à toucher dans l'ordre pour ouvrir son espace. Cette page tire les codes au hasard dans ton navigateur : <b>rien n'est enregistré ni envoyé nulle part</b>. Si tu la recharges, tu obtiens d'autres codes.</p>
+  <div class="warn">
+    <b>À faire avant de recharger la page :</b>
+    1) imprime les cartes (une par élève, à découper) ;
+    2) copie le texte ci-dessous dans la variable Vercel <code>CODES_ELEVES</code>, puis redéploie.
+  </div>
+  <p>
+    <button id="gen">🎲 Tirer de nouveaux codes</button>
+    <button id="print" class="secondary">🖨️ Imprimer les cartes</button>
+    <button id="copy" class="secondary">📋 Copier le texte pour Vercel</button>
+  </p>
+</div>
+
+<div id="cards"></div>
+
+<div class="noprint">
+  <p><b>Texte à coller dans Vercel</b> (variable <code>CODES_ELEVES</code>) :</p>
+  <textarea id="json" readonly></textarea>
+  <p>Correspondance chiffre ↔ image (pour corriger un code à la main) :<br>
+     <span class="legend" id="legend"></span></p>
+</div>
+
+<script>
+const STUDENTS = ["Arielle","Augustin","Aurélien","Charlie","Charly","Eden","Eris","Hank","Ilan","Iris","Isaiah","Louis","Lyam","Léa","Maël","Nella","Octavia","Olympe","Pablo","Raphaël","Tessa","Thaïs","Thibault","Théo","Yoko","Yüna","Zélie"];
+// Même liste, dans le même ordre, que dans eleves.html
+const CODE_IMAGES = ['🍎','🚗','⭐','🌙','🌳','🎈','⚽','🍦','🔔'];
+const CODE_LENGTH = 3;
+
+let codes = {};
+function randomInt(n){
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % n;
+}
+function newCode(){
+  const pool = CODE_IMAGES.map((_, i) => i);
+  let out = '';
+  for (let k = 0; k < CODE_LENGTH; k++){ out += pool.splice(randomInt(pool.length), 1)[0]; }  // 3 images différentes
+  return out;
+}
+function generate(){
+  codes = {};
+  const used = new Set();
+  STUDENTS.forEach(name => {
+    let c; do { c = newCode(); } while (used.has(c));   // deux élèves n'ont jamais le même code
+    used.add(c); codes[name] = c;
+  });
+  render();
+}
+function render(){
+  const cards = document.getElementById('cards');
+  cards.innerHTML = '';
+  STUDENTS.forEach(name => {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = '<div class="name"></div><div class="pics"></div>';
+    d.querySelector('.name').textContent = name;
+    d.querySelector('.pics').textContent = codes[name].split('').map(i => CODE_IMAGES[+i]).join(' ');
+    cards.appendChild(d);
+  });
+  document.getElementById('json').value = JSON.stringify(codes);
+}
+document.getElementById('legend').textContent = CODE_IMAGES.map((img, i) => `${i} = ${img}`).join('   ');
+document.getElementById('gen').addEventListener('click', () => { if (confirm("Tirer de nouveaux codes ? Les codes actuels (et les cartes déjà imprimées) ne seront plus valables avec ce nouveau texte.")) generate(); });
+document.getElementById('print').addEventListener('click', () => window.print());
+document.getElementById('copy').addEventListener('click', async () => {
+  const ta = document.getElementById('json');
+  try{ await navigator.clipboard.writeText(ta.value); alert('Copié. Colle-le dans la variable CODES_ELEVES de Vercel.'); }
+  catch(e){ ta.select(); document.execCommand('copy'); alert('Copié.'); }
+});
+generate();
+</script>
+</body>
+</html>
