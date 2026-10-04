@@ -9,6 +9,12 @@
 // Variables d'environnement Vercel :
 //   APPS_SCRIPT_URL     adresse du déploiement Apps Script (se termine par /exec)
 //   APPS_SCRIPT_SECRET  le même mot de passe que la constante SECRET du script
+//   CODES_ELEVES        les codes secrets des élèves, au format JSON : {"Arielle":"157","Augustin":"042", ...}
+//                       (chiffres 0 à 8 = les 9 images du code ; à générer avec codes.html).
+//                       Sans cette variable, la page des élèves est bloquée.
+//
+// POST /api/photo-upload   body JSON (vérification du code d'un élève) :
+//   { action: "check", eleve: "Adel", code: "157" }  -> { ok: true }  ou 401 si le code est faux
 //
 // POST /api/photo-upload   body JSON:
 //   { eleve: "Adel", filename: "photo.jpg", mimeType: "image/jpeg", base64: "....", source?: "eleve" }
@@ -19,12 +25,50 @@
 const ELEVES = ["Arielle","Augustin","Aurélien","Charlie","Charly","Eden","Eris","Hank","Ilan","Iris","Isaiah","Louis","Lyam","Léa","Maël","Nella","Octavia","Olympe","Pablo","Raphaël","Tessa","Thaïs","Thibault","Théo","Yoko","Yüna","Zélie"]
   .map(n => n.normalize('NFC'));
 
+const crypto = require('crypto');
+
+// Codes secrets des élèves (variable d'environnement CODES_ELEVES), clés normalisées.
+function loadCodes(){
+  try{
+    const raw = JSON.parse(process.env.CODES_ELEVES || '');
+    const out = {};
+    Object.keys(raw).forEach(k => { out[k.normalize('NFC')] = String(raw[k]); });
+    return out;
+  }catch(e){ return null; }
+}
+function codeIsValid(codes, eleve, code){
+  const expected = codes[String(eleve).normalize('NFC')];
+  if (!expected || typeof code !== 'string') return false;
+  const a = Buffer.from(expected), b = Buffer.from(code);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS'){ res.status(200).end(); return; }
   if (req.method !== 'POST'){ res.status(405).json({ error: 'Méthode non supportée.' }); return; }
+
+  // ---- Code secret des élèves ----
+  const bodyIn = req.body || {};
+  const fromStudentPage = bodyIn.source === 'eleve';
+  if (bodyIn.action === 'check' || fromStudentPage){
+    if (!ELEVES.includes(String(bodyIn.eleve || '').normalize('NFC'))){
+      res.status(400).json({ error: `Prénom inconnu : « ${bodyIn.eleve} ».` });
+      return;
+    }
+    const codes = loadCodes();
+    if (!codes){
+      res.status(500).json({ error: "CODES_ELEVES n'est pas configuré sur Vercel (voir codes.html)." });
+      return;
+    }
+    if (!codeIsValid(codes, bodyIn.eleve, bodyIn.code)){
+      res.status(401).json({ error: 'Code incorrect.' });
+      return;
+    }
+    if (bodyIn.action === 'check'){ res.status(200).json({ ok: true }); return; }
+  }
 
   const scriptUrl = process.env.APPS_SCRIPT_URL;
   const secret = process.env.APPS_SCRIPT_SECRET;
