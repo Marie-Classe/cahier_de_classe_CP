@@ -61,7 +61,7 @@
   .name-tile.locked{ opacity:0.45; position:relative; }
   .name-tile.locked::after{ content:"🔒"; position:absolute; top:6px; right:8px; font-size:1.4rem; }
 
-  /* ---- Écran code secret (3 images) ---- */
+  /* ---- Écran code secret (images à toucher dans l'ordre) ---- */
   #screenCode{ gap:14px; }
   .dots{ display:flex; gap:14px; height:44px; align-items:center; }
   .dot{ width:30px; height:30px; border-radius:50%; background:#D9D2C3; }
@@ -109,7 +109,7 @@
   <div id="names"></div>
 </div>
 
-<!-- Écran 1 bis : mon code secret (3 images) -->
+<!-- Écran 1 bis : mon code secret (images à toucher dans l'ordre) -->
 <div id="screenCode" class="screen">
   <button class="back-btn" id="codeBackBtn" aria-label="Retour">⬅️</button>
   <div class="who"><span class="emoji" id="codeEmoji"></span><span id="codeName"></span></div>
@@ -165,7 +165,7 @@ const MAX_AUDIO_SECONDS = 180;         // arrêt automatique après 3 minutes
 
 // Images du code secret. L'ordre compte : il doit rester identique dans codes.html.
 const CODE_IMAGES = ['🍎','🚗','⭐','🌙','🌳','🎈','⚽','🍦','🔔'];
-const CODE_LENGTH = 3;
+const CODE_LENGTH = 2;   // nombre d'images à toucher (même valeur dans codes.html)
 const MAX_FAILS = 3, LOCK_MS = 60000;
 let current = null;           // prénom de l'élève
 let currentCode = '';         // code validé par le serveur pour cet élève (chiffres 0 à 8)
@@ -218,7 +218,7 @@ function goHome(){
   refreshLocks();
 }
 
-// ---- Code secret : 3 images à toucher dans l'ordre ----
+// ---- Code secret : quelques images à toucher dans l'ordre ----
 function shuffled(arr){
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
