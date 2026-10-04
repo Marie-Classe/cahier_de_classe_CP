@@ -9,12 +9,12 @@
 // Variables d'environnement Vercel :
 //   APPS_SCRIPT_URL     adresse du déploiement Apps Script (se termine par /exec)
 //   APPS_SCRIPT_SECRET  le même mot de passe que la constante SECRET du script
-//   CODES_ELEVES        les codes secrets des élèves, au format JSON : {"Arielle":"157","Augustin":"042", ...}
+//   CODES_ELEVES        les codes secrets des élèves, au format JSON : {"Arielle":"15","Augustin":"04", ...}
 //                       (chiffres 0 à 8 = les 9 images du code ; à générer avec codes.html).
 //                       Sans cette variable, la page des élèves est bloquée.
 //
 // POST /api/photo-upload   body JSON (vérification du code d'un élève) :
-//   { action: "check", eleve: "Adel", code: "157" }  -> { ok: true }  ou 401 si le code est faux
+//   { action: "check", eleve: "Adel", code: "15" }  -> { ok: true }  ou 401 si le code est faux
 //
 // POST /api/photo-upload   body JSON:
 //   { eleve: "Adel", filename: "photo.jpg", mimeType: "image/jpeg", base64: "....", source?: "eleve" }
