@@ -18,6 +18,18 @@
   .card .pics{ font-size:2.4rem; letter-spacing:6px; margin-top:4px; }
   textarea{ width:100%; max-width:760px; height:150px; font-family:monospace; font-size:0.78rem; }
   .legend{ font-size:1.4rem; }
+  .card.edited{ border-color:#C9A94C; background:#FFFBEF; }
+  .card .actions{ margin-top:8px; display:flex; gap:6px; justify-content:center; }
+  .card .actions button{ font-size:0.78rem; padding:5px 9px; margin:0; background:white; color:#2E2A24; }
+  #modal{ position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:10; }
+  #modal.open{ display:flex; }
+  #modalBox{ background:white; border-radius:16px; padding:18px; width:min(92vw, 380px); text-align:center; }
+  #modalBox h2{ margin:0 0 8px; font-size:1.1rem; }
+  #slots{ display:flex; gap:10px; justify-content:center; margin:8px 0 12px; }
+  .slot{ width:64px; height:64px; border:2px dashed #BBB; border-radius:12px; font-size:2.2rem; display:flex; align-items:center; justify-content:center; }
+  #picGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+  #picGrid button{ background:#FBF7EF; color:inherit; border:1px solid #DDD; font-size:2rem; padding:8px 0; margin:0; }
+  #importBox{ width:100%; max-width:760px; height:70px; font-family:monospace; font-size:0.78rem; }
   @media print{
     body{ background:white; padding:0; }
     .noprint{ display:none !important; }
@@ -43,11 +55,26 @@
 
 <div id="cards"></div>
 
+<div id="modal" class="noprint">
+  <div id="modalBox">
+    <h2 id="modalTitle"></h2>
+    <p style="margin:0">Touche les 3 images, dans l'ordre :</p>
+    <div id="slots"></div>
+    <div id="picGrid"></div>
+    <button id="modalOk">✅ Valider</button>
+    <button id="modalClear" class="secondary">↩️ Effacer</button>
+    <button id="modalCancel" class="secondary">Annuler</button>
+  </div>
+</div>
+
 <div class="noprint">
   <p><b>Texte à coller dans Vercel</b> (variable <code>CODES_ELEVES</code>) :</p>
   <textarea id="json" readonly></textarea>
   <p>Correspondance chiffre ↔ image (pour corriger un code à la main) :<br>
      <span class="legend" id="legend"></span></p>
+  <p><b>Reprendre les codes déjà utilisés</b> (pour en modifier seulement quelques-uns sans tout changer) : colle ici le texte de ta variable Vercel <code>CODES_ELEVES</code>.</p>
+  <textarea id="importBox" placeholder='{"Arielle":"157","Augustin":"042", ...}'></textarea><br>
+  <button id="importBtn" class="secondary">📥 Charger ces codes</button>
 </div>
 
 <script>
@@ -68,7 +95,10 @@ function newCode(){
   for (let k = 0; k < CODE_LENGTH; k++){ out += pool.splice(randomInt(pool.length), 1)[0]; }  // 3 images différentes
   return out;
 }
+let edited = new Set();   // élèves dont le code a été modifié à la main
+
 function generate(){
+  edited.clear();
   codes = {};
   const used = new Set();
   STUDENTS.forEach(name => {
@@ -82,14 +112,94 @@ function render(){
   cards.innerHTML = '';
   STUDENTS.forEach(name => {
     const d = document.createElement('div');
-    d.className = 'card';
-    d.innerHTML = '<div class="name"></div><div class="pics"></div>';
+    d.className = 'card' + (edited.has(name) ? ' edited' : '');
+    d.innerHTML = '<div class="name"></div><div class="pics"></div><div class="actions noprint"><button class="edit">✏️ Modifier</button><button class="dice" title="Tirer un autre code au hasard pour cet élève">🎲</button></div>';
     d.querySelector('.name').textContent = name;
     d.querySelector('.pics').textContent = codes[name].split('').map(i => CODE_IMAGES[+i]).join(' ');
+    d.querySelector('.edit').addEventListener('click', () => openEditor(name));
+    d.querySelector('.dice').addEventListener('click', () => randomFor(name));
     cards.appendChild(d);
   });
   document.getElementById('json').value = JSON.stringify(codes);
 }
+function ownerOf(code, except){
+  return STUDENTS.find(n => n !== except && codes[n] === code);
+}
+function setCode(name, code){
+  const other = ownerOf(code, name);
+  if (other && !confirm(`Ce code est déjà celui de ${other}. Le donner aussi à ${name} ? (deux élèves pourraient alors se faire passer l'un pour l'autre)`)) return false;
+  codes[name] = code;
+  edited.add(name);
+  render();
+  return true;
+}
+function randomFor(name){
+  let c, tries = 0;
+  do { c = newCode(); tries++; } while ((ownerOf(c, name) || c === codes[name]) && tries < 200);
+  setCode(name, c);
+}
+
+// ---- Fenêtre « modifier le code d'un élève »
+let editing = null, picks = [];
+function renderEditor(){
+  const slots = document.getElementById('slots');
+  slots.innerHTML = '';
+  for (let i = 0; i < CODE_LENGTH; i++){
+    const d = document.createElement('div');
+    d.className = 'slot';
+    d.textContent = picks[i] != null ? CODE_IMAGES[picks[i]] : '';
+    slots.appendChild(d);
+  }
+  document.getElementById('modalOk').disabled = picks.length !== CODE_LENGTH;
+}
+function openEditor(name){
+  editing = name; picks = [];
+  document.getElementById('modalTitle').textContent = 'Code de ' + name;
+  const grid = document.getElementById('picGrid');
+  grid.innerHTML = '';
+  CODE_IMAGES.forEach((img, i) => {
+    const b = document.createElement('button');
+    b.textContent = img;
+    b.addEventListener('click', () => { if (picks.length < CODE_LENGTH){ picks.push(i); renderEditor(); } });
+    grid.appendChild(b);
+  });
+  renderEditor();
+  document.getElementById('modal').classList.add('open');
+}
+function closeEditor(){ document.getElementById('modal').classList.remove('open'); editing = null; }
+document.getElementById('modalClear').addEventListener('click', () => { picks = []; renderEditor(); });
+document.getElementById('modalCancel').addEventListener('click', closeEditor);
+document.getElementById('modalOk').addEventListener('click', () => {
+  if (picks.length !== CODE_LENGTH) return;
+  const name = editing;
+  if (setCode(name, picks.join(''))) closeEditor();
+});
+
+// ---- Reprendre un jeu de codes existant
+document.getElementById('importBtn').addEventListener('click', () => {
+  let src;
+  try{ src = JSON.parse(document.getElementById('importBox').value); }
+  catch(e){ alert("Ce texte n'est pas valide. Colle exactement le contenu de la variable CODES_ELEVES."); return; }
+  if (!src || typeof src !== 'object' || Array.isArray(src)){ alert('Format inattendu.'); return; }
+  const next = {}, problems = [];
+  STUDENTS.forEach(n => {
+    const v = src[n];
+    if (typeof v === 'string' && new RegExp('^[0-' + (CODE_IMAGES.length - 1) + ']{' + CODE_LENGTH + '}$').test(v)) next[n] = v;
+    else if (v !== undefined) problems.push(n + ' (code invalide)');
+  });
+  const unknown = Object.keys(src).filter(n => !STUDENTS.includes(n));
+  codes = next;
+  const used = new Set(Object.values(codes));
+  const missing = STUDENTS.filter(n => !codes[n]);
+  missing.forEach(n => { let c; do { c = newCode(); } while (used.has(c)); used.add(c); codes[n] = c; });
+  edited = new Set(missing);
+  render();
+  let msg = `Codes chargés : ${STUDENTS.length - missing.length} repris tels quels.`;
+  if (missing.length) msg += `\nNouveaux codes tirés pour : ${missing.join(', ')} (surlignés).`;
+  if (unknown.length) msg += `\nIgnorés (prénoms inconnus) : ${unknown.join(', ')}.`;
+  alert(msg);
+});
+
 document.getElementById('legend').textContent = CODE_IMAGES.map((img, i) => `${i} = ${img}`).join('   ');
 document.getElementById('gen').addEventListener('click', () => { if (confirm("Tirer de nouveaux codes ? Les codes actuels (et les cartes déjà imprimées) ne seront plus valables avec ce nouveau texte.")) generate(); });
 document.getElementById('print').addEventListener('click', () => window.print());
