@@ -11,8 +11,13 @@
 //   APPS_SCRIPT_SECRET  le même mot de passe que la constante SECRET du script
 //
 // POST /api/photo-upload   body JSON:
-//   { eleve: "Adel", filename: "photo.jpg", mimeType: "image/jpeg", base64: "...." }
+//   { eleve: "Adel", filename: "photo.jpg", mimeType: "image/jpeg", base64: "....", source?: "eleve" }
 //   -> { ok: true, link: "https://drive.google.com/..." }
+
+// Seuls ces prénoms sont acceptés : cela évite qu'une page appelant cette adresse crée
+// des dossiers au nom de n'importe qui. À tenir à jour avec la liste des élèves.
+const ELEVES = ["Arielle","Augustin","Aurélien","Charlie","Charly","Eden","Eris","Hank","Ilan","Iris","Isaiah","Louis","Lyam","Léa","Maël","Nella","Octavia","Olympe","Pablo","Raphaël","Tessa","Thaïs","Thibault","Théo","Yoko","Yüna","Zélie"]
+  .map(n => n.normalize('NFC'));
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,9 +33,14 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { eleve, filename, mimeType, base64 } = req.body || {};
+  const { eleve, filename, mimeType, base64, source } = req.body || {};
   if (!eleve || !filename || !mimeType || !base64){
     res.status(400).json({ error: "Corps attendu : { eleve, filename, mimeType, base64 }" });
+    return;
+  }
+
+  if (!ELEVES.includes(String(eleve).normalize('NFC'))){
+    res.status(400).json({ error: `Prénom inconnu : « ${eleve} ». Ajoute-le à la liste ELEVES de api/photo-upload.js.` });
     return;
   }
 
@@ -38,7 +48,8 @@ module.exports = async (req, res) => {
     const resp = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ secret, eleve, filename, mimeType, base64 }),
+      // source = 'eleve' : envoi fait par l'élève avec la tablette de classe (rangé à part)
+      body: JSON.stringify({ secret, eleve, filename, mimeType, base64, source: source === 'eleve' ? 'eleve' : '' }),
       redirect: 'follow'
     });
     const text = await resp.text();
