@@ -58,6 +58,29 @@
     background:white; font-size:2rem; box-shadow:0 3px 0 rgba(0,0,0,0.15);
   }
 
+  .name-tile.locked{ opacity:0.45; position:relative; }
+  .name-tile.locked::after{ content:"🔒"; position:absolute; top:6px; right:8px; font-size:1.4rem; }
+
+  /* ---- Écran code secret (3 images) ---- */
+  #screenCode{ gap:14px; }
+  .dots{ display:flex; gap:14px; height:44px; align-items:center; }
+  .dot{ width:30px; height:30px; border-radius:50%; background:#D9D2C3; }
+  .dot.on{ background:#2E7D32; }
+  .code-grid{
+    display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;
+    width: min(92vw, 460px);
+  }
+  .code-pic{
+    aspect-ratio:1/1; border:none; border-radius:24px; background:white; cursor:pointer;
+    font-size: clamp(3rem, 15vw, 5.5rem); line-height:1;
+    box-shadow: 0 5px 0 rgba(0,0,0,0.14);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .code-pic:active{ transform: translateY(4px); box-shadow:none; }
+  .code-grid.wrong{ animation: shake 0.45s; }
+  @keyframes shake{ 0%,100%{ transform:translateX(0);} 20%,60%{ transform:translateX(-14px);} 40%,80%{ transform:translateX(14px);} }
+  #codeMsg{ min-height:1.2em; font-size:0.9rem; color:#6B1010; text-align:center; max-width:460px; }
+
   /* ---- Écran enregistrement ---- */
   #screenRecording{ background:#FFE3E3; gap:22px; }
   #btnStop{
@@ -84,6 +107,15 @@
 <!-- Écran 1 : je clique sur mon prénom -->
 <div id="screenNames" class="screen active">
   <div id="names"></div>
+</div>
+
+<!-- Écran 1 bis : mon code secret (3 images) -->
+<div id="screenCode" class="screen">
+  <button class="back-btn" id="codeBackBtn" aria-label="Retour">⬅️</button>
+  <div class="who"><span class="emoji" id="codeEmoji"></span><span id="codeName"></span></div>
+  <div class="dots" id="codeDots"></div>
+  <div class="code-grid" id="codeGrid"></div>
+  <div id="codeMsg"></div>
 </div>
 
 <!-- Écran 2 : je choisis photo ou micro -->
@@ -122,8 +154,8 @@
 // Pour ajouter un élève : ajoute son prénom ici (et dans api/photo-upload.js).
 const STUDENTS = ["Arielle","Augustin","Aurélien","Charlie","Charly","Eden","Eris","Hank","Ilan","Iris","Isaiah","Louis","Lyam","Léa","Maël","Nella","Octavia","Olympe","Pablo","Raphaël","Tessa","Thaïs","Thibault","Théo","Yoko","Yüna","Zélie"];
 const ANIMAUX = {
-  "Arielle":"🦄","Augustin":"🦁","Aurélien":"🐻","Charlie":"🐰","Charly":"🐧","Eden":"🐶","Eris":"🦊","Hank":"🐼",
-  "Ilan":"🐯","Iris":"🦋","Isaiah":"🐸","Louis":"🐢","Lyam":"🐱","Léa":"🐬","Maël":"🐙","Nella":"🦆",
+  "Arielle":"🦄","Augustin":"🐻","Aurélien":"🦁","Charlie":"🐶","Charly":"🐱","Eden":"🐰","Eris":"🦊","Hank":"🐼",
+  "Ilan":"🐯","Iris":"🦋","Isaiah":"🐸","Louis":"🐧","Lyam":"🐬","Léa":"🐢","Maël":"🐙","Nella":"🦆",
   "Octavia":"🦉","Olympe":"🐹","Pablo":"🐴","Raphaël":"🐘","Tessa":"🐨","Thaïs":"🐞","Thibault":"🦒","Théo":"🐮",
   "Yoko":"🐠","Yüna":"🐔","Zélie":"🐝"
 };
@@ -131,7 +163,14 @@ const COULEURS = ["#FFD6A5","#CAFFBF","#9BF6FF","#BDB2FF","#FFC6FF","#FDFFB6","#
 const API_URL = '/api/photo-upload';   // même serveur que l'application de la maîtresse
 const MAX_AUDIO_SECONDS = 180;         // arrêt automatique après 3 minutes
 
+// Images du code secret. L'ordre compte : il doit rester identique dans codes.html.
+const CODE_IMAGES = ['🍎','🚗','⭐','🌙','🌳','🎈','⚽','🍦','🔔'];
+const CODE_LENGTH = 3;
+const MAX_FAILS = 3, LOCK_MS = 60000;
 let current = null;           // prénom de l'élève
+let currentCode = '';         // code validé par le serveur pour cet élève (chiffres 0 à 8)
+let entered = [];
+const failures = {}, lockedUntil = {};
 let mediaRec = null, mediaStream = null, chunks = [], timerId = null, autoStopId = null, startedAt = 0;
 let returnTimer = null;
 
@@ -151,23 +190,118 @@ function buildNames(){
     const b = document.createElement('button');
     b.className = 'name-tile';
     b.style.background = COULEURS[i % COULEURS.length];
+    b.dataset.name = name;
     b.innerHTML = `<span class="emoji">${emojiOf(name)}</span><span></span>`;
     b.lastChild.textContent = name;
     b.addEventListener('click', () => chooseStudent(name));
     box.appendChild(b);
   });
 }
+function isLocked(name){ return (lockedUntil[name] || 0) > Date.now(); }
+function refreshLocks(){
+  document.querySelectorAll('.name-tile').forEach(t => t.classList.toggle('locked', isLocked(t.dataset.name)));
+}
+setInterval(refreshLocks, 1000);
+
 function chooseStudent(name){
+  if (isLocked(name)) return;
   current = name;
-  document.getElementById('whoEmoji').textContent = emojiOf(name);
-  document.getElementById('whoName').textContent = name;
-  show('screenChoice');
+  currentCode = '';
+  showCodeScreen();
 }
 function goHome(){
   clearTimeout(returnTimer);
   current = null;
+  currentCode = '';
+  entered = [];
   show('screenNames');
+  refreshLocks();
 }
+
+// ---- Code secret : 3 images à toucher dans l'ordre ----
+function shuffled(arr){
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function renderDots(){
+  const box = document.getElementById('codeDots');
+  box.innerHTML = '';
+  for (let i = 0; i < CODE_LENGTH; i++){
+    const d = document.createElement('span');
+    d.className = 'dot' + (i < entered.length ? ' on' : '');
+    box.appendChild(d);
+  }
+}
+function showCodeScreen(){
+  entered = [];
+  document.getElementById('codeEmoji').textContent = emojiOf(current);
+  document.getElementById('codeName').textContent = current;
+  document.getElementById('codeMsg').textContent = '';
+  const grid = document.getElementById('codeGrid');
+  grid.classList.remove('wrong');
+  grid.innerHTML = '';
+  // les images changent de place à chaque essai : impossible de copier un code "à la position"
+  shuffled(CODE_IMAGES.map((img, idx) => ({ img, idx }))).forEach(({ img, idx }) => {
+    const b = document.createElement('button');
+    b.className = 'code-pic';
+    b.textContent = img;
+    b.dataset.idx = idx;
+    b.addEventListener('click', () => tapCodePicture(idx));
+    grid.appendChild(b);
+  });
+  renderDots();
+  show('screenCode');
+}
+async function tapCodePicture(idx){
+  if (entered.length >= CODE_LENGTH) return;
+  entered.push(idx);
+  renderDots();
+  if (entered.length < CODE_LENGTH) return;
+  const code = entered.join('');
+  const grid = document.getElementById('codeGrid');
+  grid.style.pointerEvents = 'none';
+  try{
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'check', eleve: current, code })
+    });
+    const data = await resp.json().catch(() => ({}));
+    grid.style.pointerEvents = '';
+    if (resp.ok && data.ok){
+      currentCode = code;
+      failures[current] = 0;
+      document.getElementById('whoEmoji').textContent = emojiOf(current);
+      document.getElementById('whoName').textContent = current;
+      show('screenChoice');
+      return;
+    }
+    if (resp.status !== 401){
+      document.getElementById('codeMsg').textContent = data.error || ('Erreur ' + resp.status);
+      entered = []; renderDots();
+      return;
+    }
+    // mauvais code
+    failures[current] = (failures[current] || 0) + 1;
+    grid.classList.add('wrong');
+    document.getElementById('codeMsg').textContent = '❌';
+    setTimeout(() => {
+      if (failures[current] >= MAX_FAILS){
+        lockedUntil[current] = Date.now() + LOCK_MS;
+        failures[current] = 0;
+        goHome();
+      } else {
+        showCodeScreen();
+      }
+    }, 650);
+  }catch(e){
+    grid.style.pointerEvents = '';
+    document.getElementById('codeMsg').textContent = 'Pas de connexion : ' + e.message;
+    entered = []; renderDots();
+  }
+}
+document.getElementById('codeBackBtn').addEventListener('click', goHome);
 
 // ---- Résultat ----
 function showResult(ok, message){
@@ -195,7 +329,7 @@ async function upload(filename, mimeType, base64){
     const resp = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eleve: current, filename, mimeType, base64, source: 'eleve' })
+      body: JSON.stringify({ eleve: current, filename, mimeType, base64, source: 'eleve', code: currentCode })
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok){ showResult(false, data.error || ('Erreur ' + resp.status)); return; }
