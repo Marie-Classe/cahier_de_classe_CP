@@ -414,6 +414,19 @@
   .proj-overlay{ position:fixed; inset:0; z-index:99999; background:#fff; overflow:auto; padding:22px 26px; }
   .proj-overlay .proj-body{ font-size:1.25rem; pointer-events:none; }
   .proj-overlay .proj-body *{ pointer-events:none; }
+  .proj-live{ padding:10px 18px; }
+  .proj-live h2{ font-size:1.6rem; margin:0; }
+  .proj-bar{ display:flex; align-items:center; gap:14px; margin-bottom:8px; flex-wrap:wrap; }
+  .proj-bar button{ font-size:1.3rem; padding:4px 18px; border:1px solid var(--ink); background:#fff; border-radius:10px; cursor:pointer; }
+  .proj-bar .legend{ display:flex !important; flex-direction:row !important; flex-wrap:wrap; gap:6px 20px !important; font-size:1rem; margin:0; }
+  .proj-live .comport-legend-dot{ width:20px; height:20px; }
+  .proj-live #comportJourContent{ display:grid !important; grid-template-columns:repeat(3,1fr); grid-auto-rows:1fr; gap:8px 14px; height:calc(100vh - 130px); }
+  .proj-live .comport-row{ margin:0; padding:4px 14px; border-radius:14px; border-width:2px; gap:12px; }
+  .proj-live .comport-name{ font-size:clamp(1.1rem,2.7vh,2rem); font-weight:700; }
+  .proj-live .comport-cell{ width:clamp(34px,5.6vh,62px); height:clamp(34px,5.6vh,62px); font-size:clamp(.9rem,2.3vh,1.6rem); border-radius:10px; border-width:2px; }
+  .proj-live .comport-quarters{ gap:8px; }
+  .proj-live .comport-star{ width:auto; font-size:clamp(1.5rem,4.2vh,2.8rem); }
+  @media (max-width:900px){ .proj-live #comportJourContent{ grid-template-columns:1fr; height:auto; } }
   .proj-close{ position:fixed; top:12px; right:16px; z-index:100000; border:1px solid var(--ink); background:white; border-radius:9px; padding:7px 14px; font-family:-apple-system,sans-serif; cursor:pointer; }
   .proj-overlay h2{ font-family:-apple-system,sans-serif; margin:0 0 14px; }
   .eval-cell-validated{
@@ -1262,7 +1275,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 03h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 05h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -4256,8 +4269,8 @@ async function sheetSaveRow(tab, row, matchColumns){
       body: JSON.stringify({ tab, row, matchColumns })
     });
     if (!resp.ok){
-      let msg = resp.status;
-      try{ const j = await resp.json(); if (j.error) msg = j.error; }catch(e2){}
+      let msg = 'erreur ' + resp.status;
+      try{ const t = await resp.text(); try{ const j = JSON.parse(t); if (j.error) msg = j.error; }catch(e2){ if (t) msg += ' — ' + t.slice(0, 120); } }catch(e3){}
       showToast('⚠️ Sheet non mis à jour : ' + msg);
       return false;
     }
@@ -5469,6 +5482,44 @@ function renderAppelBilan(yearMonth){
 
 
 // ---------- Projeter (affichage plein écran pour la classe) ----------
+// Projection du Comportement : la vraie vue du jour est déplacée en plein écran, en gros, et reste cliquable
+function projectComportement(){
+  const content = document.getElementById('comportJourContent');
+  if (!content) return;
+  const marker = document.createComment('comport-home');
+  content.parentNode.insertBefore(marker, content);
+  const ov = document.createElement('div');
+  ov.className = 'proj-overlay proj-live';
+  const close = document.createElement('button');
+  close.className = 'proj-close'; close.textContent = '✕ Fermer';
+  const finish = () => {
+    try{ if (document.fullscreenElement) document.exitFullscreen(); }catch(e){}
+    if (marker.parentNode){ marker.parentNode.insertBefore(content, marker); marker.remove(); }
+    ov.remove();
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('fullscreenchange', onFs);
+  };
+  const onKey = e => { if (e.key === 'Escape') finish(); };
+  const onFs = () => { if (!document.fullscreenElement && document.body.contains(ov)) finish(); };
+  close.addEventListener('click', finish);
+  document.addEventListener('keydown', onKey);
+  const bar = document.createElement('div'); bar.className = 'proj-bar';
+  const prev = document.createElement('button'); prev.textContent = '←';
+  const title = document.createElement('h2');
+  const next = document.createElement('button'); next.textContent = '→';
+  const refreshTitle = () => { title.textContent = 'Comportement — ' + (document.getElementById('comportDayLabel').textContent || ''); };
+  prev.addEventListener('click', () => { shiftComportDay(-1); refreshTitle(); });
+  next.addEventListener('click', () => { shiftComportDay(1); refreshTitle(); });
+  refreshTitle();
+  bar.appendChild(prev); bar.appendChild(title); bar.appendChild(next);
+  const legend = document.querySelector('#comportJourView .legend');
+  if (legend) bar.appendChild(legend.cloneNode(true));
+  ov.appendChild(close); ov.appendChild(bar); ov.appendChild(content);
+  document.body.appendChild(ov);
+  document.addEventListener('fullscreenchange', onFs);
+  try{ if (ov.requestFullscreen) ov.requestFullscreen().catch(() => {}); }catch(e){}
+}
+
 function projectElement(title, sourceEls){
   const ov = document.createElement('div');
   ov.className = 'proj-overlay';
@@ -5843,14 +5894,75 @@ function getComportRecord(dateStr, eleve){
 // Évite les doublons quand on tape vite plusieurs fois de suite : au lieu d'envoyer
 // une requête à chaque clic, on attend un court instant et on n'envoie que le dernier
 // état pour une même clé (ex. même élève + même jour).
-const pendingSaves = {};
+// ---------- File d'envoi vers le Sheet : regroupée, espacée, avec nouvelles tentatives ----------
+// Toutes les modifications (évaluations, comportement, journal, appel...) sont mises en file,
+// puis envoyées EN LOT (une requête par onglet) quelques instants après la dernière action.
+// En cas d'erreur (quota Google, serveur occupé, réseau), l'envoi est retenté automatiquement.
+const pendingBatch = new Map(); // clé -> { tab, row, matchColumns }
+let batchTimer = null, batchRunning = false, batchFailNotified = false;
 function debouncedSheetSaveRow(key, tab, row, matchColumns, delay){
-  if (pendingSaves[key]) clearTimeout(pendingSaves[key]);
-  pendingSaves[key] = setTimeout(() => {
-    delete pendingSaves[key];
-    sheetSaveRow(tab, row, matchColumns);
-  }, delay || 500);
+  pendingBatch.set(key, { tab, row, matchColumns });
+  if (batchTimer) clearTimeout(batchTimer);
+  batchTimer = setTimeout(flushSheetBatch, Math.max(delay || 0, 900));
 }
+async function postUpsertBatch(tab, items){
+  const resp = await fetch(SHEET_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    keepalive: items.length < 150,
+    body: JSON.stringify({ tab, upserts: items.map(i => ({ row: i.row, matchColumns: i.matchColumns })) })
+  });
+  if (!resp.ok){
+    let msg = 'erreur ' + resp.status;
+    try{ const t = await resp.text(); try{ const j = JSON.parse(t); if (j.error) msg = j.error; }catch(e2){ if (t) msg += ' — ' + t.slice(0, 120); } }catch(e3){}
+    const err = new Error(msg); err.status = resp.status; throw err;
+  }
+}
+async function flushSheetBatch(){
+  if (batchRunning){ batchTimer = setTimeout(flushSheetBatch, 1000); return; }
+  if (pendingBatch.size === 0) return;
+  batchRunning = true;
+  const entries = Array.from(pendingBatch.entries());
+  pendingBatch.clear();
+  const byTab = {};
+  entries.forEach(([key, v]) => { (byTab[v.tab] = byTab[v.tab] || []).push(Object.assign({ key }, v)); });
+  const failed = [];
+  let lastMsg = '';
+  for (const tab of Object.keys(byTab)){
+    const all = byTab[tab];
+    // paquets de 60 lignes maximum par requête
+    for (let i = 0; i < all.length; i += 60){
+      const chunk = all.slice(i, i + 60);
+      let ok = false;
+      for (let attempt = 0; attempt < 4 && !ok; attempt++){
+        try{
+          await postUpsertBatch(tab, chunk);
+          ok = true;
+        }catch(e){
+          lastMsg = e.message;
+          if (e.status && e.status >= 400 && e.status < 500 && e.status !== 429) break; // erreur de requête : inutile de réessayer
+          if (attempt < 3) await new Promise(r => setTimeout(r, [1500, 4000, 9000][attempt]));
+        }
+      }
+      if (!ok) chunk.forEach(c => failed.push(c));
+    }
+  }
+  batchRunning = false;
+  if (failed.length){
+    // on remet en file (sans écraser une valeur plus récente) et on réessaie dans 45 s
+    failed.forEach(c => { if (!pendingBatch.has(c.key)) pendingBatch.set(c.key, { tab: c.tab, row: c.row, matchColumns: c.matchColumns }); });
+    if (!batchFailNotified){
+      batchFailNotified = true;
+      showToast('⚠️ Sheet pas encore à jour (' + lastMsg + ') — nouvel essai automatique dans 45 s, rien n\'est perdu.');
+    }
+    if (batchTimer) clearTimeout(batchTimer);
+    batchTimer = setTimeout(flushSheetBatch, 45000);
+  } else {
+    if (batchFailNotified){ batchFailNotified = false; showToast('✅ Sheet à jour.'); }
+    if (pendingBatch.size > 0){ if (batchTimer) clearTimeout(batchTimer); batchTimer = setTimeout(flushSheetBatch, 900); }
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && pendingBatch.size) flushSheetBatch(); });
 
 function upsertComportRecord(rec){
   const store = loadComportStore();
@@ -6301,7 +6413,7 @@ function rerenderAfterProgressionRefresh(){
     projectElement(titres[autoView], [document.getElementById('autonomieContent')]);
   });
   document.getElementById('comportProject').addEventListener('click', () => {
-    projectElement('Comportement — ' + (document.getElementById('comportDayLabel').textContent || ''), [document.getElementById('comportJourContent')]);
+    projectComportement();
   });
   populateSuiviSelect();
   renderSuivi();
