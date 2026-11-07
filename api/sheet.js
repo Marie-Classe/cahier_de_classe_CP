@@ -27,6 +27,15 @@ function inputOptionFor(tab){
   return tab === 'Cahier-journal' ? 'USER_ENTERED' : 'RAW';
 }
 
+
+// Une cellule "=LIEN_HYPERTEXTE(\"url\";\"titre\")" est relue par Google comme "titre" : on compare donc
+// uniquement le texte affiché, sinon chaque envoi du Cahier journal créerait un doublon.
+function normalizeCell(v){
+  const str = String(v == null ? '' : v);
+  const m = str.match(/^=(?:LIEN_HYPERTEXTE|HYPERLINK)\(\s*"(?:[^"]|"")*"\s*[;,]\s*"((?:[^"]|"")*)"\s*\)$/i);
+  return m ? m[1].replace(/""/g, '"') : str;
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -87,7 +96,7 @@ module.exports = async (req, res) => {
         let matchIndex = -1; // index dans "values" (0 = en-tête)
         for (let i = 1; i < values.length; i++){
           const r = values[i];
-          const isMatch = matchColumns.every(ci => String(r[ci] || '') === String(row[ci] || ''));
+          const isMatch = matchColumns.every(ci => normalizeCell(r[ci]) === normalizeCell(row[ci]));
           if (isMatch){ matchIndex = i; break; }
         }
         if (matchIndex >= 0){
