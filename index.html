@@ -1262,7 +1262,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-07 21h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-07 22h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1479,7 +1479,7 @@
     </div>
 
     <div id="evalDomaineMode" style="display:none;">
-      <p class="empty-note" style="margin-bottom:10px;">Choisis une matière puis un domaine du livret de réussites : toutes ses notions apparaissent en colonnes, peu importe la date.</p>
+      <p class="empty-note" style="margin-bottom:10px;">Choisis une rubrique du livret : touche − / + (ou les ronds) pour chaque élève ; la ligne « Toute la classe » ajoute ou retire une validation à tout le monde. Mêmes couleurs et mêmes totaux que le livret du suivi individuel.</p>
       <div class="datebar" style="gap:8px;">
         <select id="evalDomaineSubject" class="suivi-select" style="flex:1;"></select>
         <select id="evalDomaineDomaine" class="suivi-select" style="flex:1;"></select>
@@ -3001,71 +3001,105 @@ function renderEvaluations(dateStr){
   container.appendChild(table);
 }
 
-// ---------- Évaluations par domaine (livret de réussites, indépendant de la date) ----------
+// ---------- Évaluations par rubrique (même logique que le livret du suivi individuel) ----------
+// Rubriques : Lecture - fichier, Lecture orale, Graphie, Dictée, EDL, Maths, Calcul mental.
+// Graphie/Dictée : 5 ronds. Autres : − / + jusqu'à 20, coloré. Ligne "Toute la classe" : +1 / −1 pour tous.
+const EVAL_RUBRIQUES = ['Lecture - fichier', 'Lecture orale', 'Graphie', 'Dictée', 'EDL', 'Maths', 'Calcul mental'];
+function rubriqueColumns(key){
+  if (key === 'Lecture - fichier') return livretColumns('Lecture').filter(c => c.group === 'fichier');
+  if (key === 'Lecture orale') return livretColumns('Lecture').filter(c => c.group === 'orale');
+  return livretColumns(key);
+}
 function renderEvalDomaineSubjectPicker(){
   const sel = document.getElementById('evalDomaineSubject');
-  if (sel.options.length > 0) return; // déjà peuplé
-  Object.keys(SUBJECT_DATA).sort().forEach(subj => {
-    const opt = document.createElement('option');
-    opt.value = subj; opt.textContent = subj;
-    sel.appendChild(opt);
-  });
-  sel.addEventListener('change', () => { populateEvalDomaineOptions(); renderEvalDomaine(); });
-  document.getElementById('evalDomaineDomaine').addEventListener('change', renderEvalDomaine);
+  if (sel.options.length === 0){
+    EVAL_RUBRIQUES.forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k; opt.textContent = k;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', () => { populateEvalDomaineOptions(); renderEvalDomaine(); });
+    document.getElementById('evalDomaineDomaine').addEventListener('change', renderEvalDomaine);
+  }
   populateEvalDomaineOptions();
 }
 
 function populateEvalDomaineOptions(){
-  const subj = document.getElementById('evalDomaineSubject').value;
+  const key = document.getElementById('evalDomaineSubject').value;
   const domSel = document.getElementById('evalDomaineDomaine');
-  const sheet = SUBJECT_DATA[subj];
-  const domains = Array.from(new Set((sheet ? sheet.rows : []).map(r => r.domain).filter(Boolean))).sort();
+  const prev = domSel.value;
+  const flat = key === 'Lecture - fichier' || key === 'Lecture orale';
+  const domains = flat ? [] : Array.from(new Set(rubriqueColumns(key).map(c => c.domaine).filter(Boolean)));
   domSel.innerHTML = '';
+  const all = document.createElement('option');
+  all.value = ''; all.textContent = 'Tous les domaines';
+  domSel.appendChild(all);
   domains.forEach(d => {
     const opt = document.createElement('option');
     opt.value = d; opt.textContent = d;
     domSel.appendChild(opt);
   });
+  if (domains.includes(prev)) domSel.value = prev;
+  domSel.style.display = flat || domains.length < 2 ? 'none' : '';
+}
+
+// Contrôle de saisie pour une case (compteur coloré ou 5 ronds) ; se met à jour sur place.
+function buildEvalControl(col, student, onChange){
+  const isDots = col.mode === 'dots';
+  const max = isDots ? LIVRET_DOTS : LIVRET_MAX;
+  const wrap = document.createElement('div');
+  wrap.className = 'livret-count';
+  let num, dots = [];
+  const refresh = total => {
+    if (isDots){
+      dots.forEach((d, i) => d.classList.toggle('on', total >= i + 1));
+    } else {
+      const st = counterStyle(total);
+      num.textContent = total; num.style.background = st.bg; num.style.color = st.fg;
+    }
+  };
+  const apply = target => {
+    target = Math.min(max, Math.max(0, target));
+    setEvalTotal(col.subjectKey, col.domaine, col.titre, student, target);
+    refresh(target);
+    if (onChange) onChange();
+  };
+  const current = () => evalTotalFor(col.subjectKey, col.titre, student);
+  if (isDots){
+    wrap.className = 'livret-dots';
+    for (let k = 1; k <= LIVRET_DOTS; k++){
+      const d = document.createElement('button');
+      d.className = 'livret-dot';
+      d.addEventListener('click', () => { const cur = current(); apply(cur === k ? k - 1 : k); });
+      dots.push(d); wrap.appendChild(d);
+    }
+  } else {
+    const minus = document.createElement('button'); minus.textContent = '−';
+    num = document.createElement('div'); num.className = 'livret-num';
+    const plus = document.createElement('button'); plus.textContent = '+';
+    minus.addEventListener('click', () => apply(current() - 1));
+    plus.addEventListener('click', () => apply(current() + 1));
+    wrap.appendChild(minus); wrap.appendChild(num); wrap.appendChild(plus);
+  }
+  refresh(current());
+  return { el: wrap, refresh, current };
 }
 
 function renderEvalDomaine(){
-  const subj = document.getElementById('evalDomaineSubject').value;
+  const key = document.getElementById('evalDomaineSubject').value;
   const domaine = document.getElementById('evalDomaineDomaine').value;
   const container = document.getElementById('evalDomaineContent');
   container.innerHTML = '';
-  if (!subj || !domaine) return;
+  if (!key) return;
 
-  const sheet = SUBJECT_DATA[subj];
-  const rowsInDomain = (sheet ? sheet.rows : []).filter(r => r.domain === domaine);
-  if (rowsInDomain.length === 0){
+  let columns = rubriqueColumns(key);
+  if (domaine) columns = columns.filter(c => c.domaine === domaine);
+  if (columns.length === 0){
     const note = document.createElement('div');
     note.className = 'empty-note';
-    note.textContent = "Aucune notion trouvée pour ce domaine.";
+    note.textContent = "Aucune notion trouvée pour cette rubrique (la progression est peut-être encore en cours de chargement).";
     container.appendChild(note);
     return;
-  }
-
-  // Une évaluation créée depuis cette vue est datée d'aujourd'hui (nouvelle tentative).
-  const todayStr = fmtDate(new Date());
-  const columns = [];
-  rowsInDomain.forEach(r => {
-    if (subj === 'Lecture'){
-      columns.push({ subjectKey: subj, domaine, titre: `${r.title} (écrite)` });
-    } else {
-      columns.push({ subjectKey: subj, domaine, titre: r.title });
-    }
-  });
-  if (subj === 'Lecture'){
-    rowsInDomain.forEach(r => columns.push({ subjectKey: subj, domaine, titre: `${r.title} (orale)` }));
-  }
-
-  function getScore(col, eleve){
-    return evalTotalFor(col.subjectKey, col.titre, eleve);
-  }
-  function setScore(col, eleve, newScore){
-    newScore = Math.max(0, newScore);
-    setEvalTotal(col.subjectKey, col.domaine, col.titre, eleve, newScore);
-    return newScore;
   }
 
   const table = document.createElement('table');
@@ -3077,38 +3111,55 @@ function renderEvalDomaine(){
   headRow.appendChild(cornerTh);
   columns.forEach(col => {
     const th = document.createElement('th');
-    th.textContent = col.titre;
+    th.textContent = col.label;
+    th.title = col.titre;
     headRow.appendChild(th);
   });
   thead.appendChild(headRow);
+
+  // Ligne "Toute la classe" : une validation (+1 / −1) pour tous les élèves d'un coup
+  const allRow = document.createElement('tr');
+  const allTh = document.createElement('th');
+  allTh.textContent = 'Toute la classe';
+  allRow.appendChild(allTh);
+  const studentControls = []; // pour rafraîchir les cases après une action "classe"
+  columns.forEach((col, ci) => {
+    const td = document.createElement('td');
+    const wrap = document.createElement('div');
+    wrap.className = 'missions-cell-chips';
+    const minus = document.createElement('button'); minus.className = 'missions-mini-chip'; minus.textContent = '−';
+    const plus = document.createElement('button'); plus.className = 'missions-mini-chip'; plus.textContent = '+';
+    const max = col.mode === 'dots' ? LIVRET_DOTS : LIVRET_MAX;
+    const bump = delta => {
+      STUDENTS.forEach((name, si) => {
+        const cur = evalTotalFor(col.subjectKey, col.titre, name);
+        const target = Math.min(max, Math.max(0, cur + delta));
+        if (target !== cur) setEvalTotal(col.subjectKey, col.domaine, col.titre, name, target);
+        const ctl = studentControls[si] && studentControls[si][ci];
+        if (ctl) ctl.refresh(target);
+      });
+    };
+    minus.addEventListener('click', () => bump(-1));
+    plus.addEventListener('click', () => bump(1));
+    wrap.appendChild(minus); wrap.appendChild(plus);
+    td.appendChild(wrap);
+    allRow.appendChild(td);
+  });
+  thead.appendChild(allRow);
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  STUDENTS.forEach(name => {
+  STUDENTS.forEach((name, si) => {
+    studentControls[si] = [];
     const tr = document.createElement('tr');
     const nameTd = document.createElement('td');
     nameTd.textContent = name;
     tr.appendChild(nameTd);
     columns.forEach(col => {
       const td = document.createElement('td');
-      const score = getScore(col, name);
-      if (score >= 1) td.classList.add('eval-cell-validated');
-      const wrap = document.createElement('div');
-      wrap.className = 'missions-cell-chips';
-      const minus = document.createElement('button');
-      minus.className = 'missions-mini-chip';
-      minus.textContent = '−';
-      minus.addEventListener('click', () => { setScore(col, name, getScore(col, name) - 1); renderEvalDomaine(); });
-      const valSpan = document.createElement('span');
-      valSpan.textContent = score;
-      valSpan.style.minWidth = '18px';
-      valSpan.style.display = 'inline-block';
-      const plus = document.createElement('button');
-      plus.className = 'missions-mini-chip';
-      plus.textContent = '+';
-      plus.addEventListener('click', () => { setScore(col, name, getScore(col, name) + 1); renderEvalDomaine(); });
-      wrap.appendChild(minus); wrap.appendChild(valSpan); wrap.appendChild(plus);
-      td.appendChild(wrap);
+      const ctl = buildEvalControl(col, name);
+      studentControls[si].push(ctl);
+      td.appendChild(ctl.el);
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
