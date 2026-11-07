@@ -1262,7 +1262,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 00h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 01h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -6162,7 +6162,7 @@ async function refreshProgressionData(){
           if (data.subjects[w]) return;
           const bad = (data.tabs.illisibles || []).find(t => t.onglet && t.onglet.replace(/[^a-z]/gi, '').toLowerCase().startsWith(w.replace(/[^a-z]/gi, '').toLowerCase().slice(0, 8)));
           if (bad) msgs.push(`Onglet « ${bad.onglet} » non lu : ${bad.raison}`);
-          else if ((data.tabs.introuvables || []).includes(w) || w === 'Français-Maths') msgs.push(`Onglet « ${w} » introuvable dans le classeur de progression (nom différent ? classeur non partagé avec le compte de service ?).`);
+          else if ((data.tabs.introuvables || []).includes(w) || w === 'Français-Maths') msgs.push(`Onglet « ${w} » introuvable dans le classeur de progression. Onglets vus par l'appli : ${(data.tabs.noms || []).map(n => '« ' + n + ' »').join(', ') || '(aucun)'}.`);
         });
       }
       showProgDiag(msgs.join(' · '));
