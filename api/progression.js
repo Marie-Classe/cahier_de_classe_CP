@@ -15,7 +15,7 @@
 const { getSheetsClient } = require('./lib/google');
 
 const SUBJECT_SHEETS = [
-  "Oral", "Lecture", "Compréhension", "Graphie", "Dictée", "Rédaction", "Français-Maths",
+  "Oral", "Lecture", "Compréhension", "Graphie", "Dictée", "Rédaction",
   "Calcul mental", "Problèmes", "Maths", "EDL", "Anglais", "HGScEmcEvar",
   "Ed° musicale", "Art", "Fluence"
 ];
@@ -24,7 +24,9 @@ const SUBJECT_SHEETS = [
 // accents) : "Culture chrétienne", "culture chretienne", "Culture religieuse"... sont lus
 // et rangés sous la clé "Culture chrétienne" (utilisée pour "Culture relig" du Cahier journal).
 const EXTRA_SHEETS = [
-  { key: "Culture chrétienne", matches: title => norm(title).startsWith('culture') }
+  { key: "Culture chrétienne", matches: title => norm(title).startsWith('culture') },
+  // Tout onglet dont le nom contient "français" et "math" (Français-Maths, Francais Maths, Français / Maths matin...)
+  { key: "Français-Maths", matches: title => { const n = norm(title); return /francais/.test(n) && /math/.test(n); } }
 ];
 
 function norm(s){
@@ -193,7 +195,7 @@ module.exports = async (req, res) => {
         unreadable.push({ onglet: plan[i].tab, raison: reason });
       }
     });
-    const tabs = { lus: Object.keys(subjects), illisibles: unreadable, introuvables: missing };
+    const tabs = { lus: Object.keys(subjects), illisibles: unreadable, introuvables: missing, noms: titles };
     cache = { data: subjects, tabs, timestamp: now };
     res.status(200).json({ subjects, tabs, cached: false });
   }catch(e){
