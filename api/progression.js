@@ -15,7 +15,7 @@
 const { getSheetsClient } = require('./lib/google');
 
 const SUBJECT_SHEETS = [
-  "Oral", "Lecture", "Compréhension", "Graphie", "Dictée", "Rédaction",
+  "Oral", "Lecture", "Compréhension", "Graphie", "Dictée", "Rédaction", "Français-Maths",
   "Calcul mental", "Problèmes", "Maths", "EDL", "Anglais", "HGScEmcEvar",
   "Ed° musicale", "Art", "Fluence"
 ];
