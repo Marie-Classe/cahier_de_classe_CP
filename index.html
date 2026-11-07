@@ -377,15 +377,45 @@
   .bilan-two{ display:grid; grid-template-columns:2fr 1fr; gap:12px; }
   @media (max-width:700px){ .bilan-two{ grid-template-columns:1fr; } }
   .bilan-name{ cursor:pointer; text-decoration:underline; }
-  .livret-grid{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
+  .livret-grid{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; align-items:stretch; }
+  .suivi-fold{ border:1px solid var(--line); border-radius:12px; background:white; margin:10px 0; }
+  .suivi-fold > summary{ cursor:pointer; padding:11px 14px; font-family:-apple-system,sans-serif; font-weight:700; font-size:0.95rem; list-style:none; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .suivi-fold > summary::-webkit-details-marker{ display:none; }
+  .suivi-fold > summary::before{ content:'▼'; color:var(--ink-soft); font-size:0.65rem; transition:transform .15s; transform:rotate(-90deg); }
+  .suivi-fold[open] > summary::before{ transform:rotate(0); }
+  .suivi-fold > summary small{ font-weight:500; color:var(--ink-soft); font-size:0.78rem; }
+  .suivi-fold > .fold-body{ padding:0 14px 12px; }
   .livret-cell{ width:78px; min-height:54px; border:1px solid var(--ink-soft); border-radius:8px; background:white; padding:4px 3px 5px; text-align:center; font-family:-apple-system,sans-serif; font-size:0.66rem; line-height:1.15; display:flex; flex-direction:column; justify-content:space-between; gap:4px; }
   .livret-cell.ok{ background:#FFE3B0; border-color:var(--evaluation); }
-  .livret-cell .t{ overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; word-break:break-word; }
+  .livret-cell .t{ word-break:break-word; }
   .livret-dots{ display:flex; justify-content:center; gap:3px; }
   .livret-dot{ width:15px; height:15px; border-radius:50%; border:1.5px solid var(--ink-soft); background:white; padding:0; cursor:pointer; }
   .livret-dot.on{ background:var(--evaluation); border-color:var(--evaluation); }
   .livret-tag{ font-size:0.6rem; color:var(--ink-soft); }
   .livret-subttl{ font-family:-apple-system,sans-serif; font-weight:600; font-size:0.78rem; margin-top:8px; color:var(--ink); }
+  .livret-count{ display:flex; align-items:center; justify-content:center; gap:3px; }
+  .livret-count button{ width:22px; height:24px; border:1px solid var(--ink-soft); border-radius:6px; background:white; font-size:0.9rem; line-height:1; padding:0; cursor:pointer; }
+  .livret-num{ min-width:26px; height:24px; line-height:24px; border-radius:6px; border:1px solid var(--line); font-weight:700; font-size:0.8rem; background:white; }
+  .auto-subtabs{ display:flex; gap:4px; background:#f1efe9; padding:4px; border-radius:12px; width:fit-content; margin:8px 0; }
+  .auto-subtabs button{ border:0; background:transparent; padding:7px 14px; border-radius:9px; font-family:-apple-system,sans-serif; font-size:0.8rem; cursor:pointer; color:var(--ink-soft); }
+  .auto-subtabs button.on{ background:white; color:#8a3d12; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .auto-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; }
+  .auto-card{ border:1px solid var(--line); border-radius:12px; background:white; padding:12px 14px; font-family:-apple-system,sans-serif; }
+  .auto-card b{ font-size:0.95rem; }
+  .auto-card .w{ color:var(--ink-soft); font-size:0.78rem; margin-top:3px; }
+  .auto-card.indiv .w{ font-size:0.7rem; }
+  .auto-atelier h4{ margin:0; padding:10px 14px; background:#FFF3E6; border-radius:12px 12px 0 0; font-size:0.9rem; }
+  .auto-atelier{ border:1px solid var(--line); border-radius:12px; background:white; font-family:-apple-system,sans-serif; overflow:hidden; }
+  .auto-atelier div.r{ padding:8px 14px; border-top:1px solid var(--line); font-weight:600; }
+  .auto-atelier div.r small{ display:block; font-weight:400; color:var(--ink-soft); font-size:0.7rem; }
+  .auto-note{ background:#FFF3E6; border-radius:10px; padding:10px 14px; font-family:-apple-system,sans-serif; font-size:0.78rem; margin:8px 0; }
+  .auto-piste{ border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:8px; font-family:-apple-system,sans-serif; font-size:0.8rem; }
+  .auto-chip{ display:inline-block; background:#f1efe9; border-radius:8px; padding:4px 9px; margin:4px 6px 0 0; font-size:0.75rem; }
+  .proj-overlay{ position:fixed; inset:0; z-index:99999; background:#fff; overflow:auto; padding:22px 26px; }
+  .proj-overlay .proj-body{ font-size:1.25rem; pointer-events:none; }
+  .proj-overlay .proj-body *{ pointer-events:none; }
+  .proj-close{ position:fixed; top:12px; right:16px; z-index:100000; border:1px solid var(--ink); background:white; border-radius:9px; padding:7px 14px; font-family:-apple-system,sans-serif; cursor:pointer; }
+  .proj-overlay h2{ font-family:-apple-system,sans-serif; margin:0 0 14px; }
   .eval-cell-validated{
     background: var(--evaluation) !important;
     color: white;
@@ -1231,8 +1261,8 @@
 
 <header>
   <h1>Cahier de classe — CP</h1>
-  <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-07 18h00 UTC</p>
+  <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-07 21h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1270,7 +1300,7 @@
   </button>
   <button class="tab-btn" data-tab="apc">
     <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4.3 4.3 0 0 1 7-3.3A4.3 4.3 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M12 9v4M10 11h4"/></svg>
-    <span>APC</span>
+    <span>Autonomie</span>
   </button>
   <button class="tab-btn" data-tab="evaluations">
     <svg viewBox="0 0 24 24"><path d="M6 3.5h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1z"/><path d="M15 3.5v4h4"/><path d="M8.5 13.5l2 2 4-4.5"/></svg>
@@ -1471,7 +1501,22 @@
 
   <!-- APC -->
   <section id="apc" class="panel">
-    <div id="apcContent"></div>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+      <div style="font-family:-apple-system,sans-serif;"><strong style="font-size:1.05rem;">Autonomie</strong> <span id="autoCount" style="color:var(--ink-soft);"></span><div style="font-size:0.72rem; color:var(--ink-soft);">Un travail, un camarade, à vous de jouer.</div></div>
+      <button class="navbtn" id="autoProject" style="width:auto; padding:6px 12px;">⛶ Projeter</button>
+    </div>
+    <div class="auto-subtabs" id="autoSubtabs">
+      <button data-v="binomes" class="on">Binômes</button><button data-v="eleve">Par élève</button><button data-v="ateliers">Ateliers</button>
+    </div>
+    <div id="autonomieContent"></div>
+    <details style="margin-top:16px; border:1px solid var(--line); border-radius:10px; background:white;">
+      <summary style="padding:12px 16px; cursor:pointer; font-family:-apple-system,sans-serif; font-weight:600; font-size:0.85rem;">Détail des pistes et des validations</summary>
+      <div id="autonomieDetail" style="padding:0 14px 14px;"></div>
+    </details>
+    <details style="margin-top:12px; border:1px solid var(--line); border-radius:10px; background:white;">
+      <summary style="padding:12px 16px; cursor:pointer; font-family:-apple-system,sans-serif; font-weight:600; font-size:0.85rem;">Actions APC (rendez-vous parents, évaluations à 0)</summary>
+      <div id="apcContent" style="padding:0 14px 14px;"></div>
+    </details>
   </section>
 
   <!-- COMPORTEMENT -->
@@ -1488,7 +1533,7 @@
         <button class="navbtn" id="nextDayComport">→</button>
       </div>
       <div class="day-label" id="comportDayLabel"></div>
-      <br>
+      <div style="margin:6px 0;"><button class="navbtn" id="comportProject" style="width:auto; padding:6px 12px;">⛶ Projeter</button></div>
       <div class="legend" style="flex-direction:column; align-items:flex-start; gap:4px;">
         <span><i class="comport-legend-dot" style="background:#FFF3B0;border-color:#E0C64A"></i> 1er rappel</span>
         <span><i class="comport-legend-dot" style="background:#FFB74D;border-color:#E0932A"></i> 2e rappel (étoile du jour perdue)</span>
@@ -1848,6 +1893,8 @@ const MATIERE_ICON = {
   "Classe": "🏫",
   "Cartable": "🎒",
   "Culture relig": "📘",
+  "Lecture orale": "🎤",
+  "EDL": "✏️",
   "Histoire": "🏺"
 };
 // Extrait le numéro d'une valeur type "E1", "E12"... pour l'ajouter au titre (ex. "- 1").
@@ -2485,7 +2532,9 @@ async function syncEvalFromSheet(){
 }
 
 // ---------- Évaluations ----------
-const EVAL_SUBJECTS = ["Graphie", "Lecture", "Maths", "Problèmes", "Calcul mental", "Dictée"]; // matières avec feuille de suivi
+const EVAL_SUBJECTS = ["Graphie", "Lecture", "Maths", "Problèmes", "Calcul mental", "Dictée", "EDL"];
+// Intitulés écartés (EDL : ceux qui commencent par G&M sont déjà dans Maths)
+function isExcludedTitle(subjectKey, title){ return subjectKey === 'EDL' && /^\s*G\s*&\s*M/i.test(String(title || '')); } // matières avec feuille de suivi
 
 // Les évaluations sont ancrées à la date EXACTE de la case orange dans la feuille source
 // (contrairement au cahier journal, on ne reporte pas depuis la date précédente).
@@ -2599,7 +2648,7 @@ function getEvaluationsForDate(subjectKey, targetDateStr){
   const out = [];
   for (const row of sheet.rows){
     const cell = row.cells[col];
-    if (cell && cell.c === 'FFFFA500'){ // orange = Évaluation
+    if (cell && cell.c === 'FFFFA500' && !isExcludedTitle(subjectKey, row.title)){ // orange = Évaluation
       out.push({ title: row.title, domain: row.domain, link: row.link });
     }
   }
@@ -3117,6 +3166,21 @@ function copyHwToClipboard(){
 }
 
 // ---------- Suivi élèves ----------
+const suiviFoldOpen = new Set();
+function makeSuiviFold(key, titleText, countText, bodyEl){
+  const det = document.createElement('details');
+  det.className = 'suivi-fold';
+  det.open = suiviFoldOpen.has(key);
+  det.addEventListener('toggle', () => { if (det.open) suiviFoldOpen.add(key); else suiviFoldOpen.delete(key); });
+  const sum = document.createElement('summary');
+  sum.appendChild(document.createTextNode(titleText));
+  if (countText){ const sm = document.createElement('small'); sm.textContent = countText; sum.appendChild(sm); }
+  det.appendChild(sum);
+  const body = document.createElement('div'); body.className = 'fold-body';
+  body.appendChild(bodyEl);
+  det.appendChild(body);
+  return det;
+}
 function escHtml(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const CLASSE_ENTIERE = '__CLASSE__';
 function populateSuiviSelect(){
@@ -3545,7 +3609,8 @@ function setEvalTotal(discipline, domaine, titre, eleve, target){
   let newToday = todayVal + diff;
   let remainder = 0;
   if (newToday < 0){ remainder = newToday; newToday = 0; }
-  upsertEvalRecord({ date: todayStr, discipline, domaine: domaine || '', titre, eleve, score: String(newToday) });
+  const dom = (recs.find(r => r.domaine) || {}).domaine || domaine || '';
+  upsertEvalRecord({ date: todayStr, discipline, domaine: dom, titre, eleve, score: String(newToday) });
   if (remainder < 0){
     recs.filter(r => r.date !== todayStr).sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
       if (remainder >= 0) return;
@@ -3558,24 +3623,68 @@ function setEvalTotal(discipline, domaine, titre, eleve, target){
   }
 }
 
-// Liste des "cases du livret" d'une matière : une par ligne de la feuille de progression
-// (Lecture : une version écrite + une version orale, comme dans l'onglet Évaluations).
+// Liste des "cases du livret" d'une matière : une par ligne de la feuille de progression.
+// Graphie et Dictée : 5 ronds. Les autres matières : compteur −/+ jusqu'à 20.
+// Lecture : "Sons à évaluer" = lignes de l'onglet Lecture sous la ligne 28, puis les autres lignes,
+// puis la lecture orale (une évaluation par période).
+const LIVRET_DOTS_SUBJECTS = new Set(['Graphie', 'Dictée']);
+const LECTURE_SONS_APRES_LIGNE = 28;
+const LIVRET_MAX = 20;
 function livretColumns(subjectKey){
   const sheet = SUBJECT_DATA[subjectKey];
-  const rows = sheet ? sheet.rows : [];
+  const rows = (sheet ? sheet.rows : []).filter(r => !isExcludedTitle(subjectKey, r.title));
   const clean = t => /^\d{4}-\d{2}-\d{2}/.test(t) ? t.replace(' 00:00:00', '') : t;
-  const cols = [];
-  rows.forEach(r => {
-    if (subjectKey === 'Lecture') cols.push({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: 'écrite', titre: `${clean(r.title)} (écrite)` });
-    else cols.push({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: '', titre: clean(r.title) });
-  });
+  const mode = LIVRET_DOTS_SUBJECTS.has(subjectKey) ? 'dots' : 'count';
+  const mk = (r, over) => Object.assign({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: '', titre: clean(r.title), mode }, over || {});
   if (subjectKey === 'Lecture'){
-    rows.forEach(r => cols.push({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: 'orale', titre: `${clean(r.title)} (orale)` }));
+    const sons = rows.filter(r => r.rowNum && r.rowNum > LECTURE_SONS_APRES_LIGNE);
+    const autres = rows.filter(r => !(r.rowNum && r.rowNum > LECTURE_SONS_APRES_LIGNE));
+    const cols = [];
+    // "Lecture - fichier" : d'abord les sons (sous la ligne 28), puis les autres lignes
+    sons.concat(autres).forEach(r => cols.push(mk(r, { titre: `${clean(r.title)} (écrite)`, group: 'fichier' })));
+    for (let p = 1; p <= 5; p++){
+      cols.push({ subjectKey, domaine: 'Lecture orale', label: `Période ${p}`, tag: '', titre: `Lecture orale — Période ${p}`, mode: 'count', noPiste: true, group: 'orale' });
+    }
+    return cols;
   }
-  return cols;
+  return rows.map(r => mk(r));
+}
+// Couleur du compteur : 1 rouge, 2 orange, 3 jaune, 4 vert clair, 5 vert moyen, 6-8 vert foncé, 9-12 bleu clair, 13+ bleu moyen
+function counterStyle(n){
+  if (n <= 0) return { bg: '#fff', fg: 'inherit' };
+  if (n === 1) return { bg: '#E53935', fg: '#fff' };
+  if (n === 2) return { bg: '#FB8C00', fg: '#fff' };
+  if (n === 3) return { bg: '#FDD835', fg: '#333' };
+  if (n === 4) return { bg: '#AED581', fg: '#333' };
+  if (n === 5) return { bg: '#66BB6A', fg: '#fff' };
+  if (n <= 8) return { bg: '#2E7D32', fg: '#fff' };
+  if (n <= 12) return { bg: '#81D4FA', fg: '#05324a' };
+  return { bg: '#1E88E5', fg: '#fff' };
 }
 const LIVRET_DOTS = 5;
+function buildLivretCountCell(col, student, rerender){
+  const total = evalTotalFor(col.subjectKey, col.titre, student);
+  const st = counterStyle(total);
+  const cell = document.createElement('div');
+  cell.className = 'livret-cell';
+  cell.style.width = '102px';
+  cell.title = `${col.subjectKey} — ${col.titre} : ${total}`;
+  const t = document.createElement('div'); t.className = 't'; t.textContent = col.label; cell.appendChild(t);
+  if (col.tag){ const tg = document.createElement('div'); tg.className = 'livret-tag'; tg.textContent = col.tag; cell.appendChild(tg); }
+  const row = document.createElement('div'); row.className = 'livret-count';
+  const minus = document.createElement('button'); minus.textContent = '−';
+  const num = document.createElement('div'); num.className = 'livret-num'; num.textContent = total;
+  num.style.background = st.bg; num.style.color = st.fg;
+  const plus = document.createElement('button'); plus.textContent = '+';
+  const apply = v => { setEvalTotal(col.subjectKey, col.domaine, col.titre, student, Math.min(LIVRET_MAX, Math.max(0, v))); rerender(); };
+  minus.addEventListener('click', () => apply(evalTotalFor(col.subjectKey, col.titre, student) - 1));
+  plus.addEventListener('click', () => apply(evalTotalFor(col.subjectKey, col.titre, student) + 1));
+  row.appendChild(minus); row.appendChild(num); row.appendChild(plus);
+  cell.appendChild(row);
+  return cell;
+}
 function buildLivretCell(col, student, rerender){
+  if (col.mode === 'count') return buildLivretCountCell(col, student, rerender);
   const total = evalTotalFor(col.subjectKey, col.titre, student);
   const cell = document.createElement('div');
   cell.className = 'livret-cell' + (total >= LIVRET_DOTS ? ' ok' : '');
@@ -3616,32 +3725,47 @@ function buildLivretSection(student, disciplineFilter, domaineFilter){
   const intro = document.createElement('div');
   intro.className = 'empty-note';
   intro.style.margin = '0 0 6px';
-  intro.textContent = `Touche les ronds pour valider (5 ronds = case acquise). Retouche le dernier rond pour le retirer. Les dictées sont dans "Dictée".`;
+  intro.textContent = `Graphie et Dictée : touche les ronds (5 = acquis ; retouche le dernier pour l'enlever). Autres rubriques : − / + jusqu'à 20 (rouge 1 · orange 2 · jaune 3 · vert clair 4 · vert 5 · vert foncé 6-8 · bleu clair 9-12 · bleu 13+).`;
   wrap.appendChild(intro);
   const rerender = () => renderSuivi();
   EVAL_SUBJECTS.forEach(subj => {
+    if (subj === 'Problèmes') return; // les problèmes sont déjà dans Maths
     if (disciplineFilter && disciplineFilter !== subj) return;
     let cols = livretColumns(subj);
     if (domaineFilter) cols = cols.filter(c => (c.domaine || '(sans domaine)') === domaineFilter);
     if (cols.length === 0) return;
-    const det = document.createElement('details');
-    det.dataset.livret = subj;
-    det.open = !!disciplineFilter || livretOpen.has(subj);
-    det.addEventListener('toggle', () => { if (det.open) livretOpen.add(subj); else livretOpen.delete(subj); });
-    const sum = document.createElement('summary');
-    const acquired = cols.filter(c => evalTotalFor(c.subjectKey, c.titre, student) >= LIVRET_DOTS).length;
-    sum.style.cssText = 'cursor:pointer;font-family:-apple-system,sans-serif;font-weight:600;padding:6px 0;';
-    sum.textContent = `${matiereIcon(subj)} ${subj} — ${acquired}/${cols.length} acquises`;
-    det.appendChild(sum);
-    const byDom = {};
-    cols.forEach(c => { const d = c.domaine || '(sans domaine)'; (byDom[d] = byDom[d] || []).push(c); });
-    Object.keys(byDom).forEach(d => {
-      const lab = document.createElement('div'); lab.className = 'livret-subttl'; lab.textContent = d; det.appendChild(lab);
-      const grid = document.createElement('div'); grid.className = 'livret-grid';
-      byDom[d].forEach(c => grid.appendChild(buildLivretCell(c, student, rerender)));
-      det.appendChild(grid);
+    const sections = subj === 'Lecture'
+      ? [{ key: 'Lecture', title: 'Lecture - fichier', cols: cols.filter(c => c.group === 'fichier'), flat: true },
+         { key: 'Lecture orale', title: 'Lecture orale', cols: cols.filter(c => c.group === 'orale'), flat: true }]
+      : [{ key: subj, title: subj, cols, flat: false }];
+    sections.forEach(sec => {
+      if (sec.cols.length === 0) return;
+      const det = document.createElement('details');
+      det.dataset.livret = sec.key;
+      det.open = !!disciplineFilter || livretOpen.has(sec.key);
+      det.addEventListener('toggle', () => { if (det.open) livretOpen.add(sec.key); else livretOpen.delete(sec.key); });
+      const sum = document.createElement('summary');
+      const countable = sec.cols.filter(c => !c.noPiste);
+      const acquired = countable.filter(c => evalTotalFor(c.subjectKey, c.titre, student) >= LIVRET_DOTS).length;
+      sum.style.cssText = 'cursor:pointer;font-family:-apple-system,sans-serif;font-weight:600;padding:6px 0;';
+      sum.textContent = `${matiereIcon(sec.key)} ${sec.title}` + (countable.length ? ` — ${acquired}/${countable.length} acquises` : '');
+      det.appendChild(sum);
+      if (sec.flat){
+        const grid = document.createElement('div'); grid.className = 'livret-grid';
+        sec.cols.forEach(c => grid.appendChild(buildLivretCell(c, student, rerender)));
+        det.appendChild(grid);
+      } else {
+        const byDom = {};
+        sec.cols.forEach(c => { const d = c.domaine || '(sans domaine)'; (byDom[d] = byDom[d] || []).push(c); });
+        Object.keys(byDom).forEach(d => {
+          const lab = document.createElement('div'); lab.className = 'livret-subttl'; lab.textContent = d; det.appendChild(lab);
+          const grid = document.createElement('div'); grid.className = 'livret-grid';
+          byDom[d].forEach(c => grid.appendChild(buildLivretCell(c, student, rerender)));
+          det.appendChild(grid);
+        });
+      }
+      wrap.appendChild(det);
     });
-    wrap.appendChild(det);
   });
   return wrap;
 }
@@ -3650,7 +3774,7 @@ const livretOpen = new Set();
 // ---------- Bilan de la classe entière ----------
 const BILAN_SEUIL = 5;        // 5 et plus = compétence validée
 const BILAN_COLLECTIF = 0.8;  // 80 % de la classe
-const BILAN_GROUPE = { 'Lecture': 'Français', 'Graphie': 'Français', 'Dictée': 'Français', 'Maths': 'Maths', 'Problèmes': 'Maths', 'Calcul mental': 'Maths' };
+const BILAN_GROUPE = { 'Lecture': 'Français', 'Graphie': 'Français', 'Dictée': 'Français', 'EDL': 'Français', 'Maths': 'Maths', 'Problèmes': 'Maths', 'Calcul mental': 'Maths' };
 
 function computeBilanClasse(){
   const todayStr = fmtDate(new Date());
@@ -3669,12 +3793,12 @@ function computeBilanClasse(){
           if (cell && cell.c === 'FFFFA500' && d && d <= todayStr) dates.add(d);
         });
       }
-      comps.set(keyOf(subj, col.titre), { discipline: subj, domaine: col.domaine, titre: col.titre, label: col.label + (col.tag ? ` (${col.tag})` : ''), dates });
+      comps.set(keyOf(subj, col.titre), { discipline: subj, domaine: col.domaine, titre: col.titre, label: col.label + (col.tag === 'orale' ? ' (orale)' : ''), dates, noPiste: !!col.noPiste });
     });
   });
   store.forEach(r => {
     const k = keyOf(r.discipline, r.titre);
-    if (!comps.has(k)) comps.set(k, { discipline: r.discipline, domaine: r.domaine || '', titre: r.titre, label: r.titre, dates: new Set() });
+    if (!comps.has(k)) comps.set(k, { discipline: r.discipline, domaine: r.domaine || '', titre: r.titre, label: r.titre.replace(/ \(écrite\)$/, ''), dates: new Set(), noPiste: /^Lecture orale/.test(r.titre) });
     comps.get(k).dates.add(r.date);
   });
   const byKey = {};
@@ -3850,51 +3974,32 @@ function renderSuivi(){
   const showExtras = !disciplineFilter && !domaineFilter;
 
   if (showExtras){
-    container.appendChild(buildRdvSection(student));
+    const rdvBlock = buildRdvSection(student);
+    const rdvH3 = rdvBlock.querySelector('h3'); if (rdvH3) rdvH3.remove();
+    const rdvCount = loadRdvStore().filter(r => r.eleve === student).length;
+    container.appendChild(makeSuiviFold('rdv', '📅 Rendez-vous parents', rdvCount ? `${rdvCount} rendez-vous` : 'aucun', rdvBlock));
 
     // ---- Missions (lecture seule ici ; modifiable dans l'onglet Missions) ----
     const missionsForStudent = MISSIONS_SKILLS.map(s => Object.assign({ cat: s.cat, label: s.label }, getMissionRecord(student, s.label)));
     const acquisCount = missionsForStudent.filter(missionAcquise).length;
-    const missionsBlock = document.createElement('div');
-    missionsBlock.className = 'discipline-group';
-    const h3m = document.createElement('h3');
-    h3m.textContent = 'Missions';
-    missionsBlock.appendChild(h3m);
     const innerM = document.createElement('div');
     innerM.className = 'domaine-block';
-    const summaryM = document.createElement('div');
-    summaryM.className = 'result-line';
-    summaryM.style.display = 'block';
-    summaryM.style.fontWeight = '600';
-    summaryM.textContent = `⭐ ${acquisCount} compétence${acquisCount>1?'s':''} acquise${acquisCount>1?'s':''} sur ${MISSIONS_SKILLS.length}`;
-    innerM.appendChild(summaryM);
-    missionsForStudent.filter(m => m.v1 || m.v2 || m.v3).forEach(m => {
+    const detailM = missionsForStudent.filter(m => m.v1 || m.v2 || m.v3);
+    detailM.forEach(m => {
       const line = document.createElement('div');
       line.className = 'result-line';
       line.style.display = 'block';
       line.textContent = `${m.label} — V1:${m.v1} V2:${m.v2} V3:${m.v3}${missionAcquise(m) ? ' ⭐ Acquis' : ''}`;
       innerM.appendChild(line);
     });
-    missionsBlock.appendChild(innerM);
-    container.appendChild(missionsBlock);
+    if (detailM.length === 0){ const e = document.createElement('div'); e.className = 'empty-note'; e.textContent = 'Aucune validation pour le moment.'; innerM.appendChild(e); }
+    container.appendChild(makeSuiviFold('missions', 'Missions', `⭐ ${acquisCount} compétence${acquisCount>1?'s':''} acquise${acquisCount>1?'s':''} sur ${MISSIONS_SKILLS.length}`, innerM));
 
     // ---- Comportement (lecture seule ici ; modifiable dans l'onglet Comportement) ----
     if (comportStore.length > 0){
-      const comportBlock = document.createElement('div');
-      comportBlock.className = 'discipline-group';
-      const h3c = document.createElement('h3');
-      h3c.textContent = 'Comportement';
-      comportBlock.appendChild(h3c);
       const innerC = document.createElement('div');
       innerC.className = 'domaine-block';
       const starsEarned = comportStore.filter(r => dayStarEarned(r.quarters)).length;
-      const summaryLine = document.createElement('div');
-      summaryLine.className = 'result-line';
-      summaryLine.style.display = 'block';
-      summaryLine.style.fontWeight = '600';
-      summaryLine.textContent = `⭐ ${starsEarned} étoile${starsEarned>1?'s':''} sur ${comportStore.length} jour${comportStore.length>1?'s':''}`;
-      innerC.appendChild(summaryLine);
-
       const todayStr = fmtDate(new Date());
       const todayRec = comportStore.find(r => r.date === todayStr);
       if (todayRec){
@@ -3904,12 +4009,10 @@ function renderSuivi(){
         todayLine.textContent = `Aujourd'hui : ${dayStarEarned(todayRec.quarters) ? '⭐ étoile gagnée' : '☆ étoile perdue'}`;
         innerC.appendChild(todayLine);
       }
-
       comportStore.slice(0, 10).forEach(r => {
         innerC.appendChild(buildComportHistoryRow(r, student, false));
       });
-      comportBlock.appendChild(innerC);
-      container.appendChild(comportBlock);
+      container.appendChild(makeSuiviFold('comport', 'Comportement', `⭐ ${starsEarned} étoile${starsEarned>1?'s':''} sur ${comportStore.length} jour${comportStore.length>1?'s':''}`, innerC));
     }
 
     // ---- Observations (+ ajout direct) ----
@@ -5290,6 +5393,150 @@ function renderAppelBilan(yearMonth){
   container.appendChild(table);
 }
 
+
+// ---------- Projeter (affichage plein écran pour la classe) ----------
+function projectElement(title, sourceEls){
+  const ov = document.createElement('div');
+  ov.className = 'proj-overlay';
+  const close = document.createElement('button');
+  close.className = 'proj-close'; close.textContent = '✕ Fermer';
+  const finish = () => { try{ if (document.fullscreenElement) document.exitFullscreen(); }catch(e){} ov.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if (e.key === 'Escape') finish(); };
+  close.addEventListener('click', finish);
+  document.addEventListener('keydown', onKey);
+  const h = document.createElement('h2'); h.textContent = title;
+  const body = document.createElement('div'); body.className = 'proj-body';
+  sourceEls.forEach(el => { if (el) body.appendChild(el.cloneNode(true)); });
+  ov.appendChild(close); ov.appendChild(h); ov.appendChild(body);
+  document.body.appendChild(ov);
+  try{ if (ov.requestFullscreen) ov.requestFullscreen().catch(() => {}); }catch(e){}
+}
+
+// ---------- Autonomie : ce que chacun travaille en premier, avec quel camarade ----------
+let autoView = 'binomes';
+function computeAutonomiePlan(){
+  const comps = computeBilanClasse().filter(c => !c.noPiste).map(c => {
+    const max = Math.max.apply(null, STUDENTS.map(n => c.totals[n]));
+    return Object.assign({}, c, { max });
+  }).filter(c => c.max >= 1);
+  const plan = {};
+  STUDENTS.forEach(n => {
+    const pistes = comps.filter(c => c.totals[n] < c.max && c.totals[n] < BILAN_SEUIL).map(c => {
+      const helpers = STUDENTS.filter(m => m !== n && c.totals[m] > c.totals[n]).sort((a, b) => c.totals[b] - c.totals[a] || a.localeCompare(b)).slice(0, 3);
+      return { comp: c, total: c.totals[n], gap: c.max - c.totals[n], helpers };
+    });
+    // d'abord celles avec au moins une validation, puis le plus grand écart au maximum de la classe
+    pistes.sort((a, b) => ((b.total >= 1) - (a.total >= 1)) || (b.gap - a.gap) || a.comp.label.localeCompare(b.comp.label));
+    plan[n] = pistes.slice(0, 3);
+  });
+  // binômes : chacun apparaît une seule fois
+  const used = new Set();
+  const units = [];
+  const order = STUDENTS.slice().sort((a, b) => {
+    const pa = plan[a][0], pb = plan[b][0];
+    return ((pb ? 1 : 0) - (pa ? 1 : 0)) || (pa && pb ? (pb.gap - pa.gap) : 0) || a.localeCompare(b);
+  });
+  order.forEach(n => {
+    if (used.has(n) || plan[n].length === 0) return;
+    for (const pi of plan[n]){
+      const h = pi.helpers.find(m => !used.has(m));
+      if (h){ used.add(n); used.add(h); units.push({ type: 'binome', comp: pi.comp, a: n, b: h }); return; }
+    }
+  });
+  order.forEach(n => {
+    if (used.has(n) || plan[n].length === 0) return;
+    used.add(n); units.push({ type: 'indiv', comp: plan[n][0].comp, a: n });
+  });
+  // élèves sans piste : binômes d'entraide sur le travail le plus demandé, sinon libre
+  const leftover = order.filter(n => !used.has(n));
+  const tally = {};
+  STUDENTS.forEach(n => { if (plan[n][0]) tally[plan[n][0].comp.label] = (tally[plan[n][0].comp.label] || 0) + 1; });
+  const topLabel = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+  const topComp = comps.find(c => c.label === topLabel) || comps[0] || null;
+  for (let i = 0; i < leftover.length; i += 2){
+    if (leftover[i + 1]) units.push({ type: 'binome', comp: topComp, a: leftover[i], b: leftover[i + 1], entraide: true });
+    else units.push({ type: 'libre', comp: topComp, a: leftover[i] });
+  }
+  return { comps, plan, units };
+}
+
+function renderAutonomie(){
+  const content = document.getElementById('autonomieContent');
+  const detail = document.getElementById('autonomieDetail');
+  if (!content) return;
+  content.innerHTML = ''; detail.innerHTML = '';
+  document.getElementById('autoCount').textContent = `· ${STUDENTS.length} élèves`;
+  document.querySelectorAll('#autoSubtabs button').forEach(b => b.classList.toggle('on', b.dataset.v === autoView));
+  const { comps, plan, units } = computeAutonomiePlan();
+  if (comps.length === 0){
+    const n = document.createElement('div'); n.className = 'empty-note';
+    n.textContent = "Pas encore assez de validations : saisis des évaluations (ou remplis le livret) pour que l'appli propose des binômes.";
+    content.appendChild(n); return;
+  }
+  const note = document.createElement('div'); note.className = 'empty-note';
+  note.textContent = 'Binômes proposés : chacun apparaît une seule fois. Un camarade peut accompagner sur le travail indiqué.';
+  content.appendChild(note);
+  const nv = (n, comp) => `${n.split(' ')[0]} · ${comp ? comp.totals[n] : 0}`;
+  const unitTitle = u => u.type === 'binome' ? `${nv(u.a, u.comp)} + ${nv(u.b, u.comp)}` : nv(u.a, u.comp);
+  const unitSub = u => u.type === 'binome' ? (u.entraide ? 'Entraide' : '') : (u.type === 'indiv' ? 'Piste individuelle' : 'Maximum atteint : au choix');
+  const sortedUnits = units.slice().sort((x, y) => (x.a).localeCompare(y.a));
+
+  if (autoView === 'binomes' || autoView === 'eleve'){
+    const grid = document.createElement('div'); grid.className = 'auto-grid';
+    const byStudent = [];
+    sortedUnits.forEach(u => {
+      byStudent.push({ n: u.a, u });
+      if (u.b) byStudent.push({ n: u.b, u });
+    });
+    if (autoView === 'binomes'){
+      sortedUnits.forEach(u => {
+        const c = document.createElement('div'); c.className = 'auto-card' + (u.type === 'binome' ? '' : ' indiv');
+        c.innerHTML = `<b>${escHtml(unitTitle(u))}</b><div class="w">${escHtml(u.comp ? u.comp.label : '—')}</div>` + (unitSub(u) && u.type !== 'binome' ? `<div class="w">${unitSub(u)}</div>` : '');
+        grid.appendChild(c);
+      });
+    } else {
+      byStudent.sort((x, y) => STUDENTS.indexOf(x.n) - STUDENTS.indexOf(y.n)).forEach(({ n, u }) => {
+        const c = document.createElement('div'); c.className = 'auto-card';
+        const other = u.type === 'binome' ? (u.a === n ? u.b : u.a) : null;
+        c.innerHTML = `<b>${escHtml(nv(n, u.comp))}</b><div class="w" style="color:var(--ink)">${escHtml(u.comp ? u.comp.label : '—')}</div>` +
+          `<div class="w">${other ? 'Avec ' + escHtml(nv(other, u.comp)) : escHtml(unitSub(u))}</div>`;
+        grid.appendChild(c);
+      });
+    }
+    content.appendChild(grid);
+  } else {
+    const groups = {};
+    sortedUnits.forEach(u => { const k = u.comp ? u.comp.label : '—'; (groups[k] = groups[k] || []).push(u); });
+    const grid = document.createElement('div'); grid.className = 'auto-grid';
+    Object.keys(groups).forEach(k => {
+      const box = document.createElement('div'); box.className = 'auto-atelier';
+      box.innerHTML = `<h4>${escHtml(k)}</h4>` + groups[k].map(u => `<div class="r">${escHtml(unitTitle(u))}${u.type !== 'binome' ? `<small>${unitSub(u)}</small>` : ''}</div>`).join('');
+      grid.appendChild(box);
+    });
+    content.appendChild(grid);
+  }
+
+  // ---- détail des pistes ----
+  const n1 = document.createElement('div'); n1.className = 'auto-note';
+  n1.innerHTML = "<b>Commencer par ce qui est déjà accessible</b><br>Les compétences avec au moins une validation passent en premier, puis celles avec le plus grand écart au maximum de la classe. Ces pistes proposent jusqu'à trois camarades plus avancés, sans réservation.";
+  detail.appendChild(n1);
+  STUDENTS.forEach(n => {
+    const card = document.createElement('div'); card.className = 'auto-piste';
+    const pistes = plan[n];
+    card.innerHTML = `<div style="display:flex;justify-content:space-between;"><b>${escHtml(n)}</b><span style="color:var(--ink-soft);font-size:0.72rem;">${pistes.length} piste(s) de travail</span></div>`;
+    if (pistes.length === 0){
+      card.innerHTML += `<div class="w" style="color:var(--ink-soft);margin-top:6px;">Aucune piste à partir des écarts actuels : cet élève atteint le maximum de la classe (ou 5+) sur les compétences évaluées. Cela ne garantit pas une maîtrise complète.</div>`;
+    }
+    pistes.forEach((pi, i) => {
+      const d = document.createElement('div'); d.className = 'auto-piste';
+      d.innerHTML = `<b>${i + 1} · ${escHtml(pi.comp.label)}</b><div style="color:var(--ink-soft);font-size:0.72rem;margin:3px 0;"><b>${pi.total} validation(s)</b> · maximum de la classe : ${pi.comp.max} · écart : ${pi.gap}</div>` +
+        (pi.helpers.length ? `<div style="font-size:0.66rem;color:var(--ink-soft);letter-spacing:.04em;">AVEC QUI TRAVAILLER</div>` + pi.helpers.map(h => `<span class="auto-chip"><b>${escHtml(h)}</b> · ${pi.comp.totals[h]} validation(s)</span>`).join('') : '');
+      card.appendChild(d);
+    });
+    detail.appendChild(card);
+  });
+}
+
 function renderApc(){
   const container = document.getElementById('apcContent');
   container.innerHTML = '';
@@ -5453,8 +5700,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       renderObservations();
     }
     if (btn.dataset.tab === 'apc'){
-      syncEvalFromSheet().then(renderApc);
+      syncEvalFromSheet().then(() => { renderApc(); renderAutonomie(); });
       renderApc();
+      renderAutonomie();
     }
     if (btn.dataset.tab === 'edt'){
       syncAllEdtFromSheet().then(renderEdtAll);
@@ -5954,6 +6202,14 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('nextDayEval').addEventListener('click', ()=>shiftEvalDay(1));
   document.getElementById('copyEval').addEventListener('click', copyEvaluationsToClipboard);
 
+  document.querySelectorAll('#autoSubtabs button').forEach(b => b.addEventListener('click', () => { autoView = b.dataset.v; renderAutonomie(); }));
+  document.getElementById('autoProject').addEventListener('click', () => {
+    const titres = { binomes: 'Autonomie — Binômes', eleve: 'Autonomie — Par élève', ateliers: 'Autonomie — Ateliers' };
+    projectElement(titres[autoView], [document.getElementById('autonomieContent')]);
+  });
+  document.getElementById('comportProject').addEventListener('click', () => {
+    projectElement('Comportement — ' + (document.getElementById('comportDayLabel').textContent || ''), [document.getElementById('comportJourContent')]);
+  });
   populateSuiviSelect();
   renderSuivi();
   document.getElementById('suiviStudent').addEventListener('change', renderSuivi);
