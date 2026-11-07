@@ -354,6 +354,38 @@
     z-index: 4;
   }
   .missions-table tr.mission-cell-acquise td{ background: #FFF9EC; }
+
+  /* ---- Bilan de classe + livret cliquable ---- */
+  .bilan-head{ font-family:-apple-system,sans-serif; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; margin:6px 0 10px; font-size:0.85rem; }
+  .bilan-head small{ color:var(--ink-soft); }
+  .bilan-matiere{ font-family:-apple-system,sans-serif; font-weight:700; margin:12px 0 6px; }
+  .bilan-tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
+  .bilan-tile{ border:1px solid var(--line); border-radius:12px; background:white; padding:10px 12px; font-family:-apple-system,sans-serif; font-size:0.78rem; }
+  .bilan-tile h4{ margin:0 0 6px; font-size:0.9rem; display:flex; justify-content:space-between; gap:6px; }
+  .bilan-tile h4 span{ font-weight:400; color:var(--ink-soft); font-size:0.72rem; }
+  .bilan-st{ display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; }
+  .bilan-st i{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+  .bilan-box{ border:1px solid var(--line); border-radius:12px; background:white; padding:12px 14px; margin-top:12px; font-family:-apple-system,sans-serif; font-size:0.8rem; }
+  .bilan-box h3{ margin:0 0 2px; font-size:0.95rem; }
+  .bilan-box .sub{ color:var(--ink-soft); font-size:0.72rem; margin-bottom:8px; }
+  .bilan-item{ border-top:1px solid var(--line); padding:8px 0; }
+  .bilan-item .l1{ display:flex; justify-content:space-between; gap:8px; font-weight:600; }
+  .bilan-item .l2{ color:var(--ink-soft); font-size:0.72rem; }
+  .bilan-bar{ position:relative; height:6px; background:#eee; border-radius:3px; margin:6px 0; }
+  .bilan-bar div{ height:100%; background:var(--evaluation); border-radius:3px; }
+  .bilan-bar b{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink); left:80%; }
+  .bilan-two{ display:grid; grid-template-columns:2fr 1fr; gap:12px; }
+  @media (max-width:700px){ .bilan-two{ grid-template-columns:1fr; } }
+  .bilan-name{ cursor:pointer; text-decoration:underline; }
+  .livret-grid{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
+  .livret-cell{ width:78px; min-height:54px; border:1px solid var(--ink-soft); border-radius:8px; background:white; padding:4px 3px 5px; text-align:center; font-family:-apple-system,sans-serif; font-size:0.66rem; line-height:1.15; display:flex; flex-direction:column; justify-content:space-between; gap:4px; }
+  .livret-cell.ok{ background:#FFE3B0; border-color:var(--evaluation); }
+  .livret-cell .t{ overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; word-break:break-word; }
+  .livret-dots{ display:flex; justify-content:center; gap:3px; }
+  .livret-dot{ width:15px; height:15px; border-radius:50%; border:1.5px solid var(--ink-soft); background:white; padding:0; cursor:pointer; }
+  .livret-dot.on{ background:var(--evaluation); border-color:var(--evaluation); }
+  .livret-tag{ font-size:0.6rem; color:var(--ink-soft); }
+  .livret-subttl{ font-family:-apple-system,sans-serif; font-weight:600; font-size:0.78rem; margin-top:8px; color:var(--ink); }
   .eval-cell-validated{
     background: var(--evaluation) !important;
     color: white;
@@ -1200,7 +1232,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · APC · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-07 13h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-07 18h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1430,7 +1462,7 @@
     <div class="datebar" style="flex-wrap:wrap; gap:8px;">
       <select id="suiviStudent" class="suivi-select"></select>
     </div>
-    <div class="datebar" style="flex-wrap:wrap; gap:8px; margin-top:-6px;">
+    <div class="datebar" id="suiviFilters" style="flex-wrap:wrap; gap:8px; margin-top:-6px;">
       <select id="suiviDiscipline" class="suivi-select"></select>
       <select id="suiviDomaine" class="suivi-select"></select>
     </div>
@@ -1859,6 +1891,9 @@ async function renderJournal(dateStr){
 
   const usedAgendaEvents = new Set();
 
+  const frMathsCard = buildFrMathsCard(dateStr);
+  if (frMathsCard) container.appendChild(frMathsCard);
+
   slots.forEach((slot, idx) => {
     const slotStartMin = parseHeureToMinutes(slot.heure);
     const nextSlot = slots[idx + 1];
@@ -2037,6 +2072,73 @@ async function renderJournal(dateStr){
   });
 }
 
+// ---------- Onglet "Français-Maths" : toutes les modalités du matin, lues JOUR PAR JOUR ----------
+const FRMATHS_KEY = 'Français-Maths';
+const FRMATHS_ORDER = ['Leçon', 'Modelage', 'Entraînement', 'Évaluation', 'Mission'];
+function getFrMathsEntries(dateStr){
+  const sheet = SUBJECT_DATA[FRMATHS_KEY];
+  if (!sheet) return [];
+  const col = findExactColumn(sheet, dateStr);
+  if (!col) return [];
+  const out = [];
+  sheet.rows.forEach(row => {
+    const cell = row.cells[col];
+    if (cell && cell.c && COLOR_MAP[cell.c]){
+      const modality = COLOR_MAP[cell.c].name;
+      out.push({ title: row.title, domain: row.domain, matiere: row.extra || '', link: resolveCellLink(row, cell, modality), rawValue: cell.v, modality, css: COLOR_MAP[cell.c].css });
+    }
+  });
+  out.sort((a, b) => FRMATHS_ORDER.indexOf(a.modality) - FRMATHS_ORDER.indexOf(b.modality));
+  return out;
+}
+function buildFrMathsCard(dateStr){
+  const entries = getFrMathsEntries(dateStr);
+  if (entries.length === 0) return null;
+  const card = document.createElement('div');
+  card.className = 'subject-card slot-line';
+  card.style.setProperty('--card-mod-color', 'var(--gold)');
+  const doneStore = loadJournalDone();
+  if (entries.every((e, i) => doneStore[journalNoteKey(dateStr, 'fm_' + i)])) card.classList.add('card-done');
+  const head = document.createElement('div');
+  head.className = 'slot-row';
+  head.style.fontWeight = '700';
+  head.textContent = '🌅 Matin — Français & Maths (toutes modalités)';
+  card.appendChild(head);
+  let lastMod = null;
+  entries.forEach((found, i) => {
+    const row = document.createElement('div');
+    row.className = 'slot-row';
+    if (found.modality !== lastMod){
+      const lab = document.createElement('div');
+      lab.className = 'livret-subttl';
+      lab.style.padding = '4px 16px 0';
+      lab.textContent = found.modality;
+      card.appendChild(lab);
+      lastMod = found.modality;
+    }
+    const dot = document.createElement('span');
+    dot.className = 'dot'; dot.style.background = found.css; dot.style.flexShrink = '0';
+    row.appendChild(dot);
+    const icon = document.createElement('span');
+    icon.className = 'slot-icon'; icon.title = found.matiere;
+    icon.textContent = matiereIcon(found.matiere);
+    row.appendChild(icon);
+    const t = document.createElement('span');
+    t.className = 'slot-title';
+    t.textContent = found.title + (found.matiere ? ` — ${found.matiere}` : '') + evalNumberSuffix(found.rawValue);
+    row.appendChild(t);
+    if (found.link){
+      const a = document.createElement('a');
+      a.className = 'slot-link-icon'; a.href = found.link; a.target = '_blank'; a.title = 'Ouvrir le lien'; a.textContent = '🔗';
+      row.appendChild(a);
+    }
+    const sp = document.createElement('span'); sp.className = 'slot-spacer'; row.appendChild(sp);
+    row.appendChild(buildDoneCheckbox(dateStr, 'fm_' + i));
+    card.appendChild(row);
+  });
+  return card;
+}
+
 function shiftJournalDay(delta){
   const cur = document.getElementById('journalDate').value;
   renderJournal(addDays(cur, delta));
@@ -2091,6 +2193,11 @@ function exportJournalDayToSheet(){
   const slots = getEffectiveSlots(wd) || [];
   const doneStore = loadJournalDone();
   const rowsToSend = [];
+  getFrMathsEntries(dateStr).forEach((found, i) => {
+    if (!doneStore[journalNoteKey(dateStr, 'fm_' + i)]) return;
+    const label = found.title + (found.matiere ? ` — ${found.matiere}` : '') + evalNumberSuffix(found.rawValue);
+    rowsToSend.push([dateStr, 'Matin', found.matiere || 'Français-Maths', found.modality, found.link ? buildHyperlinkFormula(found.link, label) : label, '', '', '1']);
+  });
   slots.forEach((slot, idx) => {
     const colorName = MODALITE_TO_COLORNAME[slot.modalite];
     const subjectKey = MATIERE_TO_SUBJECT[slot.matiere];
@@ -2904,12 +3011,11 @@ function renderEvalDomaine(){
   }
 
   function getScore(col, eleve){
-    const rec = loadEvalStore().find(r => r.discipline === col.subjectKey && r.titre === col.titre && r.eleve === eleve);
-    return rec ? parseInt(rec.score, 10) || 0 : 0;
+    return evalTotalFor(col.subjectKey, col.titre, eleve);
   }
   function setScore(col, eleve, newScore){
     newScore = Math.max(0, newScore);
-    upsertEvalRecord({ date: todayStr, discipline: col.subjectKey, domaine: col.domaine, titre: col.titre, eleve, score: String(newScore) });
+    setEvalTotal(col.subjectKey, col.domaine, col.titre, eleve, newScore);
     return newScore;
   }
 
@@ -3011,9 +3117,14 @@ function copyHwToClipboard(){
 }
 
 // ---------- Suivi élèves ----------
+function escHtml(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const CLASSE_ENTIERE = '__CLASSE__';
 function populateSuiviSelect(){
   const sel = document.getElementById('suiviStudent');
   sel.innerHTML = '';
+  const classOpt = document.createElement('option');
+  classOpt.value = CLASSE_ENTIERE; classOpt.textContent = '📊 Classe entière (bilan)';
+  sel.appendChild(classOpt);
   STUDENTS.forEach(name => {
     const opt = document.createElement('option');
     opt.value = name;
@@ -3416,11 +3527,314 @@ function buildRdvSection(student){
   return block;
 }
 
+// ---------- Total cumulé par compétence (comme l'ancien suivi : somme des dates) ----------
+function evalTotalFor(discipline, titre, eleve){
+  return loadEvalStore().filter(r => r.discipline === discipline && r.titre === titre && r.eleve === eleve)
+    .reduce((n, r) => n + (parseInt(r.score, 10) || 0), 0);
+}
+// Fixe le total cumulé : on ajuste la ligne d'aujourd'hui, puis (si besoin) les plus récentes avant.
+function setEvalTotal(discipline, domaine, titre, eleve, target){
+  target = Math.max(0, target);
+  const todayStr = fmtDate(new Date());
+  const recs = loadEvalStore().filter(r => r.discipline === discipline && r.titre === titre && r.eleve === eleve);
+  const total = recs.reduce((n, r) => n + (parseInt(r.score, 10) || 0), 0);
+  let diff = target - total;
+  if (diff === 0) return;
+  const today = recs.find(r => r.date === todayStr);
+  const todayVal = today ? (parseInt(today.score, 10) || 0) : 0;
+  let newToday = todayVal + diff;
+  let remainder = 0;
+  if (newToday < 0){ remainder = newToday; newToday = 0; }
+  upsertEvalRecord({ date: todayStr, discipline, domaine: domaine || '', titre, eleve, score: String(newToday) });
+  if (remainder < 0){
+    recs.filter(r => r.date !== todayStr).sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
+      if (remainder >= 0) return;
+      const v = parseInt(r.score, 10) || 0;
+      const nv = Math.max(0, v + remainder);
+      remainder += (v - nv);
+      remainder = remainder > 0 ? 0 : remainder;
+      if (nv !== v) upsertEvalRecord({ date: r.date, discipline, domaine: r.domaine || domaine || '', titre, eleve, score: String(nv) });
+    });
+  }
+}
+
+// Liste des "cases du livret" d'une matière : une par ligne de la feuille de progression
+// (Lecture : une version écrite + une version orale, comme dans l'onglet Évaluations).
+function livretColumns(subjectKey){
+  const sheet = SUBJECT_DATA[subjectKey];
+  const rows = sheet ? sheet.rows : [];
+  const clean = t => /^\d{4}-\d{2}-\d{2}/.test(t) ? t.replace(' 00:00:00', '') : t;
+  const cols = [];
+  rows.forEach(r => {
+    if (subjectKey === 'Lecture') cols.push({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: 'écrite', titre: `${clean(r.title)} (écrite)` });
+    else cols.push({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: '', titre: clean(r.title) });
+  });
+  if (subjectKey === 'Lecture'){
+    rows.forEach(r => cols.push({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: 'orale', titre: `${clean(r.title)} (orale)` }));
+  }
+  return cols;
+}
+const LIVRET_DOTS = 5;
+function buildLivretCell(col, student, rerender){
+  const total = evalTotalFor(col.subjectKey, col.titre, student);
+  const cell = document.createElement('div');
+  cell.className = 'livret-cell' + (total >= LIVRET_DOTS ? ' ok' : '');
+  cell.title = `${col.subjectKey} — ${col.titre} : ${total}`;
+  const t = document.createElement('div');
+  t.className = 't'; t.textContent = col.label;
+  cell.appendChild(t);
+  if (col.tag){
+    const tg = document.createElement('div'); tg.className = 'livret-tag'; tg.textContent = col.tag; cell.appendChild(tg);
+  }
+  const dots = document.createElement('div');
+  dots.className = 'livret-dots';
+  for (let k = 1; k <= LIVRET_DOTS; k++){
+    const d = document.createElement('button');
+    d.className = 'livret-dot' + (total >= k ? ' on' : '');
+    d.setAttribute('aria-label', `${k}`);
+    d.addEventListener('click', () => {
+      // taper la dernière case remplie la décoche ; sinon on remplit jusqu'à cette case
+      const cur = evalTotalFor(col.subjectKey, col.titre, student);
+      const target = (cur === k) ? k - 1 : k;
+      setEvalTotal(col.subjectKey, col.domaine, col.titre, student, target);
+      rerender();
+    });
+    dots.appendChild(d);
+  }
+  cell.appendChild(dots);
+  if (total > LIVRET_DOTS){
+    const more = document.createElement('div'); more.className = 'livret-tag'; more.textContent = `(${total})`; cell.appendChild(more);
+  }
+  return cell;
+}
+function buildLivretSection(student, disciplineFilter, domaineFilter){
+  const wrap = document.createElement('div');
+  wrap.className = 'discipline-group';
+  const h3 = document.createElement('h3');
+  h3.textContent = 'Livret de réussites';
+  wrap.appendChild(h3);
+  const intro = document.createElement('div');
+  intro.className = 'empty-note';
+  intro.style.margin = '0 0 6px';
+  intro.textContent = `Touche les ronds pour valider (5 ronds = case acquise). Retouche le dernier rond pour le retirer. Les dictées sont dans "Dictée".`;
+  wrap.appendChild(intro);
+  const rerender = () => renderSuivi();
+  EVAL_SUBJECTS.forEach(subj => {
+    if (disciplineFilter && disciplineFilter !== subj) return;
+    let cols = livretColumns(subj);
+    if (domaineFilter) cols = cols.filter(c => (c.domaine || '(sans domaine)') === domaineFilter);
+    if (cols.length === 0) return;
+    const det = document.createElement('details');
+    det.dataset.livret = subj;
+    det.open = !!disciplineFilter || livretOpen.has(subj);
+    det.addEventListener('toggle', () => { if (det.open) livretOpen.add(subj); else livretOpen.delete(subj); });
+    const sum = document.createElement('summary');
+    const acquired = cols.filter(c => evalTotalFor(c.subjectKey, c.titre, student) >= LIVRET_DOTS).length;
+    sum.style.cssText = 'cursor:pointer;font-family:-apple-system,sans-serif;font-weight:600;padding:6px 0;';
+    sum.textContent = `${matiereIcon(subj)} ${subj} — ${acquired}/${cols.length} acquises`;
+    det.appendChild(sum);
+    const byDom = {};
+    cols.forEach(c => { const d = c.domaine || '(sans domaine)'; (byDom[d] = byDom[d] || []).push(c); });
+    Object.keys(byDom).forEach(d => {
+      const lab = document.createElement('div'); lab.className = 'livret-subttl'; lab.textContent = d; det.appendChild(lab);
+      const grid = document.createElement('div'); grid.className = 'livret-grid';
+      byDom[d].forEach(c => grid.appendChild(buildLivretCell(c, student, rerender)));
+      det.appendChild(grid);
+    });
+    wrap.appendChild(det);
+  });
+  return wrap;
+}
+const livretOpen = new Set();
+
+// ---------- Bilan de la classe entière ----------
+const BILAN_SEUIL = 5;        // 5 et plus = compétence validée
+const BILAN_COLLECTIF = 0.8;  // 80 % de la classe
+const BILAN_GROUPE = { 'Lecture': 'Français', 'Graphie': 'Français', 'Dictée': 'Français', 'Maths': 'Maths', 'Problèmes': 'Maths', 'Calcul mental': 'Maths' };
+
+function computeBilanClasse(){
+  const todayStr = fmtDate(new Date());
+  const store = loadEvalStore();
+  const comps = new Map();
+  const keyOf = (d, t) => d + '||' + t;
+  EVAL_SUBJECTS.forEach(subj => {
+    const sheet = SUBJECT_DATA[subj];
+    if (!sheet) return;
+    livretColumns(subj).forEach(col => {
+      const row = sheet.rows.find(r => (/^\d{4}-\d{2}-\d{2}/.test(r.title) ? r.title.replace(' 00:00:00','') : r.title) === col.label);
+      const dates = new Set();
+      if (row){
+        Object.entries(row.cells).forEach(([c, cell]) => {
+          const d = sheet.date_cols[c];
+          if (cell && cell.c === 'FFFFA500' && d && d <= todayStr) dates.add(d);
+        });
+      }
+      comps.set(keyOf(subj, col.titre), { discipline: subj, domaine: col.domaine, titre: col.titre, label: col.label + (col.tag ? ` (${col.tag})` : ''), dates });
+    });
+  });
+  store.forEach(r => {
+    const k = keyOf(r.discipline, r.titre);
+    if (!comps.has(k)) comps.set(k, { discipline: r.discipline, domaine: r.domaine || '', titre: r.titre, label: r.titre, dates: new Set() });
+    comps.get(k).dates.add(r.date);
+  });
+  const byKey = {};
+  store.forEach(r => { (byKey[keyOf(r.discipline, r.titre)] = byKey[keyOf(r.discipline, r.titre)] || []).push(r); });
+
+  const list = [];
+  comps.forEach((c, k) => {
+    if (c.dates.size === 0) return; // jamais évaluée : hors bilan
+    const recs = byKey[k] || [];
+    const lastEval = Array.from(c.dates).sort().pop();
+    const totals = {}, before = {};
+    STUDENTS.forEach(n => { totals[n] = 0; before[n] = 0; });
+    recs.forEach(r => {
+      if (totals[r.eleve] == null) return;
+      const v = parseInt(r.score, 10) || 0;
+      totals[r.eleve] += v;
+      if (r.date < lastEval) before[r.eleve] += v;
+    });
+    const mastered = STUDENTS.filter(n => totals[n] >= BILAN_SEUIL);
+    const pct = mastered.length / STUDENTS.length;
+    const newCross = STUDENTS.some(n => totals[n] >= BILAN_SEUIL && before[n] < BILAN_SEUIL);
+    let status;
+    if (pct >= BILAN_COLLECTIF) status = 'maitrise';
+    else if (c.dates.size < 2) status = 'recul';
+    else if (newCross) status = 'progres';
+    else status = 'surveiller';
+    list.push(Object.assign({}, c, { nDates: c.dates.size, totals, mastered, pct, status }));
+  });
+  return list;
+}
+
+const BILAN_STATUS = [
+  { key: 'maitrise', label: 'Maîtrise collective', color: '#5B8A72' },
+  { key: 'progres', label: 'En progression', color: '#7B93B0' },
+  { key: 'surveiller', label: 'À surveiller', color: '#C99A5B' },
+  { key: 'recul', label: 'Recul insuffisant', color: '#A8AEB5' }
+];
+
+function renderBilanClasse(container){
+  const list = computeBilanClasse();
+  const head = document.createElement('div');
+  head.className = 'bilan-head';
+  head.innerHTML = `<strong>Classe entière · ${STUDENTS.length} élèves</strong><small>Les tendances décrivent les validations (${BILAN_SEUIL}+), sans mesurer les échecs.</small>`;
+  container.appendChild(head);
+
+  if (list.length === 0){
+    const n = document.createElement('div'); n.className = 'empty-note';
+    n.textContent = "Pas encore d'évaluation passée : le bilan apparaîtra dès qu'une évaluation aura eu lieu.";
+    container.appendChild(n); return;
+  }
+
+  // --- tuiles par matière puis domaine ---
+  const groups = {};
+  list.forEach(c => {
+    const g = BILAN_GROUPE[c.discipline] || c.discipline;
+    const d = c.domaine || c.discipline;
+    ((groups[g] = groups[g] || {})[d] = groups[g][d] || []).push(c);
+  });
+  Object.keys(groups).sort().forEach(g => {
+    const t = document.createElement('div'); t.className = 'bilan-matiere'; t.textContent = g; container.appendChild(t);
+    const grid = document.createElement('div'); grid.className = 'bilan-tiles';
+    Object.keys(groups[g]).sort().forEach(d => {
+      const items = groups[g][d];
+      const tile = document.createElement('div'); tile.className = 'bilan-tile';
+      const counts = {}; BILAN_STATUS.forEach(s => counts[s.key] = items.filter(c => c.status === s.key).length);
+      tile.innerHTML = `<h4>${escHtml(d)}<span>${items.length} comp.</span></h4><div class="bilan-st">` +
+        BILAN_STATUS.map(s => `<div><i style="background:${s.color}"></i>${counts[s.key]} ${s.label}</div>`).join('') + '</div>';
+      grid.appendChild(tile);
+    });
+    container.appendChild(grid);
+  });
+
+  const goStudent = name => { const sel = document.getElementById('suiviStudent'); sel.value = name; renderSuivi(); window.scrollTo(0, 0); };
+  const nameLink = n => { const a = document.createElement('span'); a.className = 'bilan-name'; a.textContent = n; a.addEventListener('click', () => goStudent(n)); return a; };
+
+  // --- Points d'attention + élèves à besoins ---
+  const two = document.createElement('div'); two.className = 'bilan-two';
+  const watch = list.filter(c => c.status === 'surveiller').sort((a, b) => a.pct - b.pct);
+  const boxA = document.createElement('div'); boxA.className = 'bilan-box';
+  boxA.innerHTML = `<h3>Points d'attention <small>${watch.length}</small></h3><div class="sub">Sous ${BILAN_COLLECTIF*100} %, au moins deux évaluations passées, sans nouveau franchissement à ${BILAN_SEUIL}+ depuis la dernière date d'évaluation.</div>`;
+  const mkWatch = c => {
+    const it = document.createElement('div'); it.className = 'bilan-item';
+    const pc = Math.round(c.pct * 100);
+    it.innerHTML = `<div class="l1"><span>${escHtml(c.label)}</span><span>${pc} %</span></div>
+      <div class="l2">${escHtml(c.discipline)} · À surveiller · ${c.nDates} date(s) d'évaluation passée(s) · ${c.mastered.length}/${STUDENTS.length} à ${BILAN_SEUIL}+</div>
+      <div class="bilan-bar"><div style="width:${pc}%"></div><b></b></div>`;
+    const det = document.createElement('details');
+    const sm = document.createElement('summary'); sm.style.cursor = 'pointer';
+    const below = STUDENTS.filter(n => c.totals[n] < BILAN_SEUIL);
+    sm.textContent = `Répartition des validations et élèves sous ${BILAN_SEUIL}+ (${below.length})`;
+    det.appendChild(sm);
+    const dist = document.createElement('div'); dist.className = 'l2'; dist.style.margin = '4px 0';
+    const buckets = [0,1,2,3,4].map(v => `${v} : ${STUDENTS.filter(n => c.totals[n] === v).length}`);
+    buckets.push(`${BILAN_SEUIL}+ : ${c.mastered.length}`);
+    dist.textContent = buckets.join('  ·  ');
+    det.appendChild(dist);
+    const names = document.createElement('div'); names.style.lineHeight = '1.6';
+    below.forEach((n, i) => { names.appendChild(nameLink(n)); const t = document.createElement('span'); t.textContent = ` (${c.totals[n]})` + (i < below.length - 1 ? ', ' : ''); names.appendChild(t); });
+    det.appendChild(names);
+    it.appendChild(det);
+    return it;
+  };
+  watch.slice(0, 3).forEach(c => boxA.appendChild(mkWatch(c)));
+  if (watch.length > 3){
+    const more = document.createElement('details');
+    const sm = document.createElement('summary'); sm.style.cursor = 'pointer'; sm.textContent = `Voir les ${watch.length - 3} autres compétences`;
+    more.appendChild(sm);
+    watch.slice(3).forEach(c => more.appendChild(mkWatch(c)));
+    boxA.appendChild(more);
+  }
+  if (watch.length === 0){ const n = document.createElement('div'); n.className = 'empty-note'; n.textContent = 'Aucun point d\'attention pour le moment.'; boxA.appendChild(n); }
+
+  // élèves à gros besoins : parmi les compétences validées par au moins un élève
+  const ref = list.filter(c => c.mastered.length >= 1);
+  const needs = STUDENTS.map(n => ({ n, ok: ref.filter(c => c.totals[n] >= BILAN_SEUIL).length }))
+    .filter(x => ref.length > 0 && x.ok < ref.length / 2)
+    .sort((a, b) => (a.ok / ref.length) - (b.ok / ref.length) || a.n.localeCompare(b.n));
+  const boxB = document.createElement('div'); boxB.className = 'bilan-box';
+  boxB.innerHTML = `<h3>Élèves à gros besoins <small>${needs.length}</small></h3><div class="sub">Moins de la moitié des ${ref.length} compétences validées par au moins un élève de la classe.</div>`;
+  const mkNeed = x => { const it = document.createElement('div'); it.className = 'bilan-item'; it.appendChild(nameLink(x.n)); const l2 = document.createElement('div'); l2.className = 'l2'; l2.textContent = `${x.ok}/${ref.length} compétences à ${BILAN_SEUIL}+`; it.appendChild(l2); return it; };
+  needs.slice(0, 5).forEach(x => boxB.appendChild(mkNeed(x)));
+  if (needs.length > 5){
+    const more = document.createElement('details');
+    const sm = document.createElement('summary'); sm.style.cursor = 'pointer'; sm.textContent = `Voir les ${needs.length - 5} autres élèves`;
+    more.appendChild(sm); needs.slice(5).forEach(x => more.appendChild(mkNeed(x))); boxB.appendChild(more);
+  }
+  if (needs.length === 0){ const n = document.createElement('div'); n.className = 'empty-note'; n.textContent = ref.length ? 'Aucun élève sous le seuil.' : 'Aucune compétence encore validée.'; boxB.appendChild(n); }
+  two.appendChild(boxA); two.appendChild(boxB);
+  container.appendChild(two);
+
+  // --- Acquis solides ---
+  const solid = list.filter(c => c.status === 'maitrise');
+  const boxC = document.createElement('div'); boxC.className = 'bilan-box';
+  boxC.innerHTML = `<h3>Acquis solides <small>${solid.length}</small></h3><div class="sub">Compétences maîtrisées par au moins ${BILAN_COLLECTIF*100} % du groupe, et élèves encore sous ${BILAN_SEUIL}+.</div>`;
+  if (solid.length === 0){ const n = document.createElement('div'); n.className = 'empty-note'; n.textContent = 'Aucune maîtrise collective établie.'; boxC.appendChild(n); }
+  solid.forEach(c => {
+    const it = document.createElement('div'); it.className = 'bilan-item';
+    it.innerHTML = `<div class="l1"><span>${escHtml(c.label)}</span><span>${Math.round(c.pct*100)} %</span></div>`;
+    const below = STUDENTS.filter(n => c.totals[n] < BILAN_SEUIL);
+    const l2 = document.createElement('div'); l2.className = 'l2';
+    l2.appendChild(document.createTextNode(below.length ? 'Encore sous ' + BILAN_SEUIL + '+ : ' : 'Toute la classe'));
+    below.forEach((n, i) => { l2.appendChild(nameLink(n)); if (i < below.length - 1) l2.appendChild(document.createTextNode(', ')); });
+    it.appendChild(l2); boxC.appendChild(it);
+  });
+  container.appendChild(boxC);
+}
+
 function renderSuivi(){
   const sel = document.getElementById('suiviStudent');
   const student = sel.value;
   const container = document.getElementById('suiviContent');
   container.innerHTML = '';
+
+  const filtersBar = document.getElementById('suiviFilters');
+  if (student === CLASSE_ENTIERE){
+    filtersBar.style.display = 'none';
+    renderBilanClasse(container);
+    return;
+  }
+  filtersBar.style.display = '';
 
   populateSuiviFilters(student);
   const disciplineFilter = document.getElementById('suiviDiscipline').value;
@@ -3535,6 +3949,8 @@ function renderSuivi(){
     obsBlock.appendChild(inner);
     container.appendChild(obsBlock);
   }
+
+  container.appendChild(buildLivretSection(student, disciplineFilter, domaineFilter));
 
   if (store.length === 0 && !showExtras){
     const note = document.createElement('div');
