@@ -1262,7 +1262,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 01h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 03h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1383,9 +1383,7 @@
       </div>
     </div>
 
-    <div class="actions">
-      <button class="primary" id="copyJournal">📤 Exporter le Cahier journal du jour</button>
-    </div>
+    <div class="empty-note" style="margin-top:10px;">✅ Le Cahier journal s'envoie tout seul dans l'onglet « Cahier-journal » du Sheet quand tu coches « fait ».</div>
   </section>
 
   <!-- EMPLOI DU TEMPS -->
@@ -1402,7 +1400,6 @@
     <div id="edtContent" class="edt-mobile-only"></div>
     <div class="actions edt-mobile-only" style="flex-wrap:wrap; row-gap:8px;">
       <button class="primary" id="addEdtSlot">+ Ajouter un créneau</button>
-      <button class="primary" id="copyEdt">Copier pour coller dans le Google Sheet</button>
       <button id="resetEdt" style="font-family:-apple-system,sans-serif;font-size:0.82rem;background:white;color:var(--mission);border:1px solid var(--mission);border-radius:10px;padding:10px 14px;cursor:pointer;">Réinitialiser ce jour</button>
     </div>
     <div id="edtWeekGrid" class="edt-week-grid"></div>
@@ -1433,9 +1430,6 @@
         <select id="obsStudentFilter" class="suivi-select"></select>
       </div>
       <div class="obs-grid" id="obsGrid"></div>
-      <div class="actions">
-        <button class="primary" id="copyObs">Copier pour coller dans le Google Sheet</button>
-      </div>
     </div>
 
     <div id="obsModaliteMode" style="display:none;">
@@ -1475,7 +1469,6 @@
       <br>
       <div id="evalContent" class="scroll-table-box"></div>
       <div class="actions">
-        <button class="primary" id="copyEval">Copier pour coller dans le Google Sheet</button>
       </div>
     </div>
 
@@ -1865,8 +1858,40 @@ function buildDoneCheckbox(dateStr, idx){
     saveJournalDone(dateStr, idx, cb.checked);
     const card = cb.closest('.subject-card');
     if (card) card.classList.toggle('card-done', cb.checked);
+    scheduleJournalAutoExport(cb, dateStr, idx);
   });
   return cb;
+}
+
+// ---------- Envoi automatique du Cahier journal vers l'onglet "Cahier-journal" ----------
+// À chaque case "fait" cochée (ou décochée), la ligne correspondante est créée/mise à jour dans le Sheet.
+// Colonnes : Date, Heure, Matière, Modalité, Titre (lien cliquable si dispo), Lien, Notes, Fait (1/0).
+function journalRowFromCheckbox(cb, dateStr, rowKey){
+  const idx = parseInt(String(rowKey), 10);
+  const slots = getEffectiveSlots(weekdayNameFr(dateStr)) || [];
+  const slot = slots[idx];
+  if (!slot) return null;
+  const card = cb.closest('.subject-card');
+  const rowEl = cb.closest('.slot-row');
+  const modalite = MODALITE_TO_COLORNAME[slot.modalite] || slot.modalite || '';
+  const ta = card ? card.querySelector(`textarea[data-slot-idx="${idx}"]`) : null;
+  let titre, matchColumns;
+  if (ta){ // créneau sans correspondance dans la progression : note libre
+    titre = ta.value.trim();
+    matchColumns = [0, 1, 2, 3];
+  } else {
+    const titleEl = rowEl ? rowEl.querySelector('.slot-title') : null;
+    const label = titleEl ? titleEl.textContent : (slot.matiere || '');
+    const a = rowEl ? rowEl.querySelector('a.slot-link-icon') : null;
+    titre = a && a.href ? buildHyperlinkFormula(a.href, label) : label;
+    matchColumns = [0, 1, 2, 3, 4];
+  }
+  return { row: [dateStr, slot.heure || '', slot.matiere || '', modalite, titre, '', '', cb.checked ? '1' : '0'], matchColumns };
+}
+function scheduleJournalAutoExport(cb, dateStr, rowKey){
+  const data = journalRowFromCheckbox(cb, dateStr, rowKey);
+  if (!data) return;
+  debouncedSheetSaveRow(`CahierJournal|${dateStr}|${rowKey}`, 'Cahier-journal', data.row, data.matchColumns, 700);
 }
 
 // Icône par matière/discipline, pour un affichage compact sur une seule ligne.
@@ -2047,6 +2072,8 @@ async function renderJournal(dateStr){
       const initialNote = savedNote !== undefined ? savedNote : (slot.competence || '');
       const noteToggle = buildNoteToggle(initialNote, `Notes libres — ${slot.matiere || slot.modalite || ''}`, (val) => {
         saveJournalNote(dateStr, idx, val);
+        const cbNote = noteToggle._textarea.closest('.subject-card') && noteToggle._textarea.closest('.subject-card').querySelector('.done-checkbox');
+        if (cbNote && cbNote.checked) scheduleJournalAutoExport(cbNote, dateStr, idx);
       });
       noteToggle._textarea.dataset.slotIdx = idx;
       row.appendChild(noteToggle._btn);
@@ -6205,7 +6232,6 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('journalDate').addEventListener('change', e => renderJournal(e.target.value));
   document.getElementById('prevDay').addEventListener('click', ()=>shiftJournalDay(-1));
   document.getElementById('nextDay').addEventListener('click', ()=>shiftJournalDay(1));
-  document.getElementById('copyJournal').addEventListener('click', exportJournalDayToSheet);
   document.getElementById('obsPhotoInput').addEventListener('change', handleObsPhotoSelected);
   document.getElementById('evalModeDate').addEventListener('click', () => switchEvalMode('date'));
   document.getElementById('obsModeEleve').addEventListener('click', () => switchObsMode('eleve'));
@@ -6268,7 +6294,6 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('evalDate').addEventListener('change', e => renderEvaluations(e.target.value));
   document.getElementById('prevDayEval').addEventListener('click', ()=>shiftEvalDay(-1));
   document.getElementById('nextDayEval').addEventListener('click', ()=>shiftEvalDay(1));
-  document.getElementById('copyEval').addEventListener('click', copyEvaluationsToClipboard);
 
   document.querySelectorAll('#autoSubtabs button').forEach(b => b.addEventListener('click', () => { autoView = b.dataset.v; renderAutonomie(); }));
   document.getElementById('autoProject').addEventListener('click', () => {
@@ -6285,7 +6310,6 @@ function rerenderAfterProgressionRefresh(){
   document.getElementById('suiviDomaine').addEventListener('change', renderSuivi);
 
   renderObservations();
-  document.getElementById('copyObs').addEventListener('click', copyObsToClipboard);
   document.getElementById('obsStudentFilter').addEventListener('change', renderObservations);
 
   renderApc();
@@ -6293,7 +6317,6 @@ function rerenderAfterProgressionRefresh(){
   renderEdtAll();
   document.getElementById('edtWeekday').addEventListener('change', renderEdt);
   document.getElementById('addEdtSlot').addEventListener('click', addEdtSlot);
-  document.getElementById('copyEdt').addEventListener('click', copyEdtToClipboard);
   document.getElementById('resetEdt').addEventListener('click', resetEdtDay);
 
   renderComportJour(defaultDate);
