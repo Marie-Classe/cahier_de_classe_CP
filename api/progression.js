@@ -52,11 +52,35 @@ function serialToDateStr(serial){
   return d.toISOString().slice(0, 10);
 }
 
+// Dates écrites en texte ("lun. 31 août 26", "mar. 1 sept. 26") quand la cellule n'est pas une vraie date
+const FR_MONTH_PREFIX = [['janv',0],['févr',1],['fevr',1],['mars',2],['avr',3],['mai',4],['juin',5],['juil',6],['août',7],['aout',7],['sept',8],['oct',9],['nov',10],['déc',11],['dec',11]];
+function parseFrenchDateLabel(label){
+  if (!label) return null;
+  const m = String(label).toLowerCase().match(/(\d{1,2})\s+([a-zéûèôîç]+)\.?\s+(\d{2,4})/);
+  if (!m) return null;
+  const mon = FR_MONTH_PREFIX.find(([pre]) => m[2].startsWith(pre));
+  if (!mon) return null;
+  let year = parseInt(m[3], 10); if (year < 100) year += 2000;
+  const d = new Date(Date.UTC(year, mon[1], parseInt(m[1], 10)));
+  return isNaN(d) ? null : d.toISOString().slice(0, 10);
+}
+
+// Couleurs des modalités (pour "recaler" des teintes légèrement différentes dans Français-Maths)
+const KNOWN_COLORS = ['FF4682B4', 'FFF5DEB3', 'FFBA55D3', 'FFFFA500', 'FFDC143C'];
+function snapColor(hex){
+  if (!hex) return hex;
+  const v = h => [parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), parseInt(h.slice(6, 8), 16)];
+  const a = v(hex);
+  let best = null, bestD = Infinity;
+  KNOWN_COLORS.forEach(k => { const b = v(k); const d = Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]); if (d < bestD){ bestD = d; best = k; } });
+  return bestD <= 45 ? best : hex;
+}
+
 async function extractSheet(sheets, spreadsheetId, sheetName){
   const resp = await sheets.spreadsheets.get({
     spreadsheetId,
     ranges: [`'${sheetName}'`],
-    fields: 'sheets.data.rowData.values(formattedValue,effectiveValue,userEnteredFormat.backgroundColor,hyperlink)'
+    fields: 'sheets.data.rowData.values(formattedValue,effectiveValue,userEnteredFormat.backgroundColor,effectiveFormat.backgroundColor,hyperlink)'
   });
   const sheetData = resp.data.sheets && resp.data.sheets[0] && resp.data.sheets[0].data && resp.data.sheets[0].data[0];
   const rowData = (sheetData && sheetData.rowData) || [];
@@ -71,6 +95,9 @@ async function extractSheet(sheets, spreadsheetId, sheetName){
     if (ev && typeof ev.numberValue === 'number'){
       const ds = serialToDateStr(ev.numberValue);
       if (ds) dateCols[idx] = ds;
+    } else {
+      const ds = parseFrenchDateLabel(cell.formattedValue || (ev && ev.stringValue));
+      if (ds) dateCols[idx] = ds;
     }
   });
   if (Object.keys(dateCols).length === 0) return null;
@@ -81,7 +108,11 @@ async function extractSheet(sheets, spreadsheetId, sheetName){
     const rowValues = rowData[r].values;
     if (!rowValues || !rowValues[0]) continue;
     const titleCell = rowValues[0];
-    const title = titleCell.formattedValue;
+    let title = titleCell.formattedValue;
+    // Onglet Lecture : sous la ligne 28, les sons à évaluer peuvent n'avoir leur nom qu'en colonne B
+    if (!title && sheetName === 'Lecture' && (r + 1) > 28 && rowValues[1] && rowValues[1].formattedValue){
+      title = rowValues[1].formattedValue;
+    }
     if (!title) continue;
     const domain = rowValues[1] ? (rowValues[1].formattedValue || null) : null;
     const link = titleCell.hyperlink || null;
@@ -94,7 +125,9 @@ async function extractSheet(sheets, spreadsheetId, sheetName){
       const idx = parseInt(idxStr, 10);
       const cell = rowValues[idx];
       if (!cell) return;
-      const hex = rgbToHex(cell.userEnteredFormat && cell.userEnteredFormat.backgroundColor);
+      let hex = rgbToHex(cell.userEnteredFormat && cell.userEnteredFormat.backgroundColor);
+      if (!hex) hex = rgbToHex(cell.effectiveFormat && cell.effectiveFormat.backgroundColor); // couleurs issues d'une mise en forme conditionnelle
+      if (sheetName === 'Français-Maths' || /^fran/i.test(sheetName) && /maths/i.test(sheetName)) hex = snapColor(hex);
       const val = cell.formattedValue;
       const cellLink = cell.hyperlink || null;
       if (hex || (val !== undefined && val !== null && val !== '') || cellLink){
@@ -103,9 +136,8 @@ async function extractSheet(sheets, spreadsheetId, sheetName){
         cells[idx + 1] = entry; // clé = colonne 1-indexée, comme le reste de l'app
       }
     });
-    if (Object.keys(cells).length > 0){
-      rows.push({ title, domain, link, extra, cells });
-    }
+    // On garde aussi les lignes titrées sans case colorée (elles servent au livret de réussites)
+    rows.push({ title, domain, link, extra, cells, rowNum: r + 1 });
   }
 
   const date_cols = {};
