@@ -1262,7 +1262,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-07 23h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 00h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1372,6 +1372,7 @@
       <span><i class="dot" style="background:var(--mission)"></i> Mission</span>
       <span><i class="dot" style="background:var(--autonomie)"></i> Autonomie</span>
     </div>
+    <div id="progDiag" style="display:none; font-family:-apple-system,sans-serif; font-size:0.78rem; background:#FFF3CD; border:1px solid #E0C64A; border-radius:10px; padding:9px 12px; margin:8px 0;"></div>
     <div id="journalContent"></div>
 
     <div class="analyse-card">
@@ -6148,15 +6149,36 @@ let progressionRefreshedOnce = false;
 async function refreshProgressionData(){
   try{
     const resp = await fetch(PROGRESSION_API_URL);
-    if (!resp.ok) return false;
+    if (!resp.ok){ showProgDiag(`Le serveur de progression répond une erreur (${resp.status}).`); return false; }
     const data = await resp.json();
     if (data.subjects){
+      // Diagnostic visible : l'appli dit elle-même quels onglets elle n'a pas pu lire
+      const wanted = ['Français-Maths', 'Culture chrétienne'];
+      const msgs = [];
+      if (!data.tabs){
+        msgs.push("Le fichier api/progression.js sur GitHub/Vercel n'est PAS à jour (il ne lit ni « Français-Maths » ni « Culture chrétienne »). Remplace-le par la dernière version puis attends le redéploiement.");
+      } else {
+        wanted.forEach(w => {
+          if (data.subjects[w]) return;
+          const bad = (data.tabs.illisibles || []).find(t => t.onglet && t.onglet.replace(/[^a-z]/gi, '').toLowerCase().startsWith(w.replace(/[^a-z]/gi, '').toLowerCase().slice(0, 8)));
+          if (bad) msgs.push(`Onglet « ${bad.onglet} » non lu : ${bad.raison}`);
+          else if ((data.tabs.introuvables || []).includes(w) || w === 'Français-Maths') msgs.push(`Onglet « ${w} » introuvable dans le classeur de progression (nom différent ? classeur non partagé avec le compte de service ?).`);
+        });
+      }
+      showProgDiag(msgs.join(' · '));
       Object.keys(data.subjects).forEach(key => { SUBJECT_DATA[key] = data.subjects[key]; });
       progressionRefreshedOnce = true;
       return true;
     }
   }catch(e){ /* hors-ligne : on garde les données embarquées en secours */ }
   return false;
+}
+
+function showProgDiag(msg){
+  const el = document.getElementById('progDiag');
+  if (!el) return;
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg ? '⚠️ ' + msg : '';
 }
 
 function rerenderAfterProgressionRefresh(){
