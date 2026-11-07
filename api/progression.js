@@ -20,7 +20,18 @@ const SUBJECT_SHEETS = [
   "Ed° musicale", "Art", "Fluence"
 ];
 
-let cache = { data: null, timestamp: 0 };
+// Onglets supplémentaires, repérés par leur nom (sans tenir compte des majuscules ni des
+// accents) : "Culture chrétienne", "culture chretienne", "Culture religieuse"... sont lus
+// et rangés sous la clé "Culture chrétienne" (utilisée pour "Culture relig" du Cahier journal).
+const EXTRA_SHEETS = [
+  { key: "Culture chrétienne", matches: title => norm(title).startsWith('culture') }
+];
+
+function norm(s){
+  return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+let cache = { data: null, tabs: null, timestamp: 0 };
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 function rgbToHex(colorObj){
@@ -108,7 +119,7 @@ module.exports = async (req, res) => {
 
   const now = Date.now();
   if (cache.data && (now - cache.timestamp) < CACHE_TTL_MS){
-    res.status(200).json({ subjects: cache.data, cached: true });
+    res.status(200).json({ subjects: cache.data, tabs: cache.tabs, cached: true });
     return;
   }
 
@@ -120,17 +131,39 @@ module.exports = async (req, res) => {
 
   try{
     const sheets = getSheetsClient();
+
+    // Noms réels des onglets (pour retrouver "culture chrétienne" quelle que soit son écriture)
+    let titles = [];
+    try{
+      const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties.title' });
+      titles = (meta.data.sheets || []).map(s => s.properties.title);
+    }catch(e){ /* on continue avec les noms habituels */ }
+    const actualTitle = name => titles.find(t => norm(t) === norm(name)) || name;
+
+    const plan = SUBJECT_SHEETS.map(name => ({ key: name, tab: actualTitle(name) }));
+    const missing = [];
+    EXTRA_SHEETS.forEach(extra => {
+      const tab = titles.find(t => extra.matches(t) && !plan.some(p => p.tab === t));
+      if (tab) plan.push({ key: extra.key, tab });
+      else if (titles.length) missing.push(extra.key);
+    });
+
     const results = await Promise.allSettled(
-      SUBJECT_SHEETS.map(name => extractSheet(sheets, spreadsheetId, name).then(data => [name, data]))
+      plan.map(p => extractSheet(sheets, spreadsheetId, p.tab).then(data => ({ key: p.key, tab: p.tab, data })))
     );
     const subjects = {};
-    results.forEach(r => {
-      if (r.status === 'fulfilled' && r.value[1]){
-        subjects[r.value[0]] = r.value[1];
+    const unreadable = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled' && r.value.data){
+        subjects[r.value.key] = r.value.data;
+      } else {
+        const reason = r.status === 'rejected' ? (r.reason && r.reason.message || 'erreur') : 'onglet vide, ou sans dates en ligne 1 à partir de la colonne C';
+        unreadable.push({ onglet: plan[i].tab, raison: reason });
       }
     });
-    cache = { data: subjects, timestamp: now };
-    res.status(200).json({ subjects, cached: false });
+    const tabs = { lus: Object.keys(subjects), illisibles: unreadable, introuvables: missing };
+    cache = { data: subjects, tabs, timestamp: now };
+    res.status(200).json({ subjects, tabs, cached: false });
   }catch(e){
     res.status(500).json({ error: "Erreur de lecture de la progression : " + e.message });
   }
