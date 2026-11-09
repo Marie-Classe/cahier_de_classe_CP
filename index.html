@@ -464,6 +464,9 @@
     flex-shrink:0;
     white-space:nowrap;
   }
+  .postpone-btn{border:1px solid var(--line, #ccc);background:white;border-radius:6px;font-size:0.9rem;line-height:1;padding:3px 6px;cursor:pointer;color:var(--ink-soft);flex-shrink:0;margin-right:2px;}
+  .postpone-btn.on{background:#fff3cd;border-color:#e0a800;color:#8a6100;font-weight:700;}
+  .reported .slot-title, .reported-card .slot-title{font-style:italic;}
   .subject-card.card-done .slot-title{
     color: var(--card-mod-color, var(--ink));
     font-weight: 700;
@@ -1275,7 +1278,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-09 23h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-09 23h30 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1896,6 +1899,78 @@ function saveJournalDone(dateStr, idx, checked){
   try{ localStorage.setItem(JOURNAL_DONE_KEY, JSON.stringify(store)); }
   catch(e){ /* stockage indisponible */ }
 }
+// ---------- Report au lendemain (↪) : ce qui n'a pas été fait est proposé en italique le jour de classe suivant ----------
+const JOURNAL_REPORT_KEY = 'cahier_de_classe_journal_report_v1';
+function loadReports(){ try{ return JSON.parse(localStorage.getItem(JOURNAL_REPORT_KEY) || '{}'); }catch(e){ return {}; } }
+function saveReports(o){ try{ localStorage.setItem(JOURNAL_REPORT_KEY, JSON.stringify(o)); }catch(e){} }
+function nextSchoolDay(dateStr){
+  let d = dateStr;
+  for (let i = 0; i < 10; i++){
+    d = addDays(d, 1);
+    if (getEffectiveSlots(weekdayNameFr(d))) return d;
+  }
+  return addDays(dateStr, 1);
+}
+function buildPostponeBtn(dateStr, rowKey, payload){
+  const id = `${dateStr}::${rowKey}`;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'postpone-btn';
+  const refresh = () => {
+    const r = loadReports()[id];
+    b.classList.toggle('on', !!r);
+    b.textContent = '↪';
+    b.title = r ? `Reporté au ${dayLabelFr(r.to)} — toucher pour annuler` : 'Reporter au prochain jour de classe';
+  };
+  refresh();
+  b.addEventListener('click', () => {
+    const store = loadReports();
+    if (store[id]){ delete store[id]; saveReports(store); refresh(); showToast('Report annulé.'); return; }
+    const to = nextSchoolDay(dateStr);
+    store[id] = Object.assign({ from: dateStr, to }, payload);
+    saveReports(store); refresh();
+    showToast(`↪ Reporté au ${dayLabelFr(to)} (affiché en italique).`);
+  });
+  return b;
+}
+function buildReportedCard(dateStr){
+  const store = loadReports();
+  const items = Object.keys(store).filter(k => store[k].to === dateStr && store[k].from !== dateStr);
+  if (items.length === 0) return null;
+  const card = document.createElement('div');
+  card.className = 'subject-card slot-line reported-card';
+  card.style.setProperty('--card-mod-color', 'var(--ink-soft)');
+  const head = document.createElement('div');
+  head.className = 'slot-row'; head.style.fontWeight = '700';
+  head.textContent = '↪ Reporté des jours précédents';
+  card.appendChild(head);
+  const doneStore = loadJournalDone();
+  if (items.every(k => doneStore[journalNoteKey(dateStr, 'rp_' + k)])) card.classList.add('card-done');
+  items.forEach(k => {
+    const r = store[k];
+    const row = document.createElement('div'); row.className = 'slot-row reported';
+    const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = r.css || 'var(--ink-soft)'; dot.style.flexShrink = '0'; row.appendChild(dot);
+    const ic = document.createElement('span'); ic.className = 'slot-icon'; ic.textContent = matiereIcon(r.matiere); row.appendChild(ic);
+    const t = document.createElement('span'); t.className = 'slot-title'; t.style.fontStyle = 'italic';
+    t.textContent = r.title; row.appendChild(t);
+    const from = document.createElement('span'); from.className = 'slot-heure'; from.style.fontStyle = 'italic'; from.textContent = `du ${dayLabelFr(r.from)}`; 
+    if (r.link){
+      const a = document.createElement('a'); a.className = 'slot-link-icon'; a.href = r.link; a.target = '_blank'; a.title = 'Ouvrir le lien'; a.textContent = '🔗'; row.appendChild(a);
+    }
+    const sp = document.createElement('span'); sp.className = 'slot-spacer'; row.appendChild(sp);
+    // ↪ encore : reporter de nouveau ; ✕ : abandonner
+    const again = document.createElement('button'); again.type = 'button'; again.className = 'postpone-btn'; again.textContent = '↪'; again.title = 'Reporter encore au jour suivant';
+    again.addEventListener('click', () => { const st = loadReports(); if (st[k]){ st[k].to = nextSchoolDay(dateStr); saveReports(st); } renderJournal(dateStr); });
+    row.appendChild(again);
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'postpone-btn'; del.textContent = '✕'; del.title = 'Abandonner';
+    del.addEventListener('click', () => { const st = loadReports(); delete st[k]; saveReports(st); renderJournal(dateStr); });
+    row.appendChild(del);
+    row.appendChild(buildDoneCheckbox(dateStr, 'rp_' + k));
+    row.appendChild(from);
+    card.appendChild(row);
+  });
+  return card;
+}
 function buildDoneCheckbox(dateStr, idx){
   const cb = document.createElement('input');
   cb.type = 'checkbox';
@@ -2014,6 +2089,8 @@ async function renderJournal(dateStr){
   container.innerHTML = '';
 
   const usedAgendaEvents = new Set();
+  const reportedCard = buildReportedCard(dateStr);
+  if (reportedCard) container.appendChild(reportedCard);
 
   slots.forEach((slot, idx) => {
     const slotStartMin = parseHeureToMinutes(slot.heure);
@@ -2182,6 +2259,10 @@ async function renderJournal(dateStr){
       spacer.className = 'slot-spacer';
       row.appendChild(spacer);
 
+      row.appendChild(buildPostponeBtn(dateStr, rowKey, {
+        title: found.title + (found.extra ? ` — ${found.extra}` : '') + evalNumberSuffix(found.rawValue),
+        matiere: slot.matiere || '', link: found.link || null, css: found.css
+      }));
       row.appendChild(buildDoneCheckbox(dateStr, rowKey));
 
       const heureSpan = document.createElement('span');
@@ -2256,6 +2337,7 @@ function buildFrMathsCard(dateStr){
       row.appendChild(a);
     }
     const sp = document.createElement('span'); sp.className = 'slot-spacer'; row.appendChild(sp);
+    row.appendChild(buildPostponeBtn(dateStr, 'fm_' + i, { title: found.title + (found.matiere ? ` — ${found.matiere}` : '') + evalNumberSuffix(found.rawValue), matiere: found.matiere, link: found.link || null, css: found.css }));
     row.appendChild(buildDoneCheckbox(dateStr, 'fm_' + i));
     card.appendChild(row);
   });
