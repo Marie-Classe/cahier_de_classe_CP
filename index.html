@@ -1275,7 +1275,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-08 05h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-09 23h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -1669,13 +1669,44 @@ function findActiveColumn(sheet, targetDateStr){
 // Entraînement/Évaluation) le lien de la case Modelage de la même ligne, sinon le
 // lien historique posé sur le titre (colonne A).
 function resolveCellLink(row, cell, modalityName){
-  if (cell.l) return cell.l;
+  if (cell.l) return cell.l;                       // 1. le lien de la case elle-même
   if (modalityName === 'Entraînement' || modalityName === 'Évaluation'){
     for (const c of Object.values(row.cells)){
-      if (c.c === 'FFF5DEB3' && c.l) return c.l; // beige = Modelage
+      if (c.c === 'FFF5DEB3' && c.l) return c.l;   // 2. le modelage de la même ligne
     }
   }
-  return row.link || null;
+  // 3. on remonte sur la ligne : dernier lien posé AVANT cette date
+  const myEntry = Object.entries(row.cells).find(([k, v]) => v === cell);
+  if (myEntry){
+    const myCol = parseInt(myEntry[0], 10);
+    let bestCol = -1, bestLink = null;
+    Object.entries(row.cells).forEach(([k, v]) => {
+      const c = parseInt(k, 10);
+      if (v && v.l && c < myCol && c > bestCol){ bestCol = c; bestLink = v.l; }
+    });
+    if (bestLink) return bestLink;
+  }
+  return row.link || null;                         // 4. enfin le lien du titre
+}
+
+// Titres de lecture "f, d, è ê" : un son par élément, séparés par des virgules
+function splitSounds(title){
+  return String(title || '').split(',').map(t => t.trim()).filter(Boolean);
+}
+const isLectureDomain = d => /^\s*lecture\s*$/i.test(String(d || ''));
+// Tous les sons à évaluer, dans l'ordre de la progression Français-Maths (hors intitulés longs comme "je révise")
+function frMathsSounds(){
+  const sheet = SUBJECT_DATA['Français-Maths'];
+  const out = [], seen = new Set();
+  if (!sheet) return out;
+  sheet.rows.forEach(row => {
+    if (!isLectureDomain(row.domain)) return;
+    splitSounds(row.title).forEach(snd => {
+      if (snd.length > 8 || seen.has(snd)) return;
+      seen.add(snd); out.push({ sound: snd, row });
+    });
+  });
+  return out;
 }
 
 function getActiveEntries(subjectName, targetDateStr){
@@ -1689,15 +1720,19 @@ function getActiveEntries(subjectName, targetDateStr){
     const cell = row.cells[col];
     if (cell && cell.c && COLOR_MAP[cell.c]){
       const modality = COLOR_MAP[cell.c].name;
-      out.push({
-        title: row.title,
+      const link = resolveCellLink(row, cell, modality);
+      // Français-Maths, lecture : une entrée par son (leçon, modelage, entraînement, évaluation de chaque son)
+      const titles = (subjectName === 'Français-Maths' && isLectureDomain(row.domain) && String(row.title).includes(','))
+        ? splitSounds(row.title) : [row.title];
+      titles.forEach(t => out.push({
+        title: t,
         domain: row.domain,
-        link: resolveCellLink(row, cell, modality),
+        link: link,
         extra: row.extra,
         rawValue: cell.v,
         modality: modality,
         css: COLOR_MAP[cell.c].css
-      });
+      }));
     }
   }
   return out;
@@ -2593,6 +2628,9 @@ function getExactColoredEntries(subjectKey, targetDateStr, colorHex){
   return out;
 }
 
+// Onglet Leçons : seules ces matières ; Oral / Rédaction / Compréhension passent en "propositions de missions"
+const LECONS_MATIERES = ['Graphie', 'Dictée', 'Calcul mental', 'Français-Maths', 'Anglais', 'HGScEmcEvar', 'Art', 'EDL'];
+const LECONS_PROPOSITIONS_MISSION = ['Oral', 'Rédaction', 'Compréhension'];
 function renderLecons(mondayStr){
   const fridayStr = addDays(mondayStr, 4);
   const prevWednesdayStr = addDays(mondayStr, -5);
@@ -2610,12 +2648,18 @@ function renderLecons(mondayStr){
 
   daysToShow.forEach(dateStr => {
     const dayEntries = [];
-    Object.keys(SUBJECT_DATA).forEach(subjectKey => {
+    const missionEntries = [];
+    LECONS_MATIERES.forEach(subjectKey => {
       getExactColoredEntries(subjectKey, dateStr, LECON_COLOR_HEX).forEach(entry => {
-        dayEntries.push({ subjectKey, entry });
+        if (subjectKey === 'Français-Maths' && isLectureDomain(entry.domain) && String(entry.title).includes(',')){
+          splitSounds(entry.title).forEach(t => dayEntries.push({ subjectKey, entry: Object.assign({}, entry, { title: t }) }));
+        } else dayEntries.push({ subjectKey, entry });
       });
     });
-    if (dayEntries.length === 0) return;
+    LECONS_PROPOSITIONS_MISSION.forEach(subjectKey => {
+      getExactColoredEntries(subjectKey, dateStr, LECON_COLOR_HEX).forEach(entry => missionEntries.push({ subjectKey, entry }));
+    });
+    if (dayEntries.length === 0 && missionEntries.length === 0) return;
     anyFound = true;
 
     const block = document.createElement('div');
@@ -2624,7 +2668,7 @@ function renderLecons(mondayStr){
     h3.textContent = dayLabelFr(dateStr);
     block.appendChild(h3);
 
-    dayEntries.forEach(({ subjectKey, entry }) => {
+    const appendRows = (entries) => entries.forEach(({ subjectKey, entry }) => {
       const row = document.createElement('div');
       row.className = 'slot-row';
       row.style.padding = '9px 16px';
@@ -2651,6 +2695,15 @@ function renderLecons(mondayStr){
 
       block.appendChild(row);
     });
+    appendRows(dayEntries);
+    if (missionEntries.length){
+      const sub = document.createElement('div');
+      sub.className = 'livret-subttl';
+      sub.style.padding = '8px 16px 2px';
+      sub.textContent = '💡 Propositions de missions';
+      block.appendChild(sub);
+      appendRows(missionEntries);
+    }
 
     container.appendChild(block);
   });
@@ -2676,6 +2729,40 @@ function findExactColumn(sheet, targetDateStr){
   }
   return null;
 }
+// Évaluations du jour lues dans la progression Français-Maths (cases orange de la date exacte).
+// Rubrique (discipline) déduite du domaine : Lecture -> un son par colonne ; Ecriture -> Graphie ;
+// Calcul mental / Problèmes ; matière Français hors lecture et écriture -> EDL ; le reste -> Maths.
+function frMathsDisciplineFor(row){
+  const dom = String(row.domain || '').trim().toLowerCase();
+  if (isLectureDomain(row.domain)) return 'Lecture';
+  if (/^[eé]criture$/.test(dom)) return 'Graphie';
+  if (/calcul mental/.test(dom)) return 'Calcul mental';
+  if (/probl/.test(dom)) return 'Problèmes';
+  if (/^\s*g\s*&\s*m/i.test(String(row.title || ''))) return 'Maths';
+  if (/fran/i.test(String(row.extra || ''))) return 'EDL';
+  return 'Maths';
+}
+function getFrMathsEvaluationsForDate(targetDateStr){
+  const sheet = SUBJECT_DATA['Français-Maths'];
+  if (!sheet) return [];
+  const col = findExactColumn(sheet, targetDateStr);
+  if (!col) return [];
+  const out = [];
+  const clean = t => /^\d{4}-\d{2}-\d{2}/.test(t) ? t.replace(' 00:00:00', '') : t;
+  sheet.rows.forEach(row => {
+    const cell = row.cells[col];
+    if (!(cell && cell.c === 'FFFFA500')) return;
+    const disc = frMathsDisciplineFor(row);
+    if (disc === 'Lecture'){
+      splitSounds(row.title).forEach(snd => out.push({ subjectKey: 'Lecture', domaine: 'Lecture', titre: `${snd} (écrite)`, label: snd }));
+    } else {
+      const t = clean(row.title);
+      out.push({ subjectKey: disc, domaine: row.domain || '', titre: t, label: t });
+    }
+  });
+  return out;
+}
+
 function getEvaluationsForDate(subjectKey, targetDateStr){
   const sheet = SUBJECT_DATA[subjectKey];
   if (!sheet) return [];
@@ -2901,27 +2988,18 @@ function renderEvaluations(dateStr){
   // Liste des colonnes à afficher : une par évaluation active ce jour-là. Pour la
   // Lecture, toutes les évaluations écrites sont groupées ensemble, puis toutes les
   // orales ensemble (plutôt que d'alterner écrite/orale par titre).
+  // Sources de la liste : Dictée, Graphie, puis Français-Maths (jamais les onglets Maths ni Lecture).
   const columns = [];
-  EVAL_SUBJECTS.forEach(subjectKey => {
-    const entries = getEvaluationsForDate(subjectKey, dateStr);
-    if (subjectKey === 'Lecture'){
-      const ecriteCols = [];
-      const oraleCols = [];
-      entries.forEach(found => {
-        let displayTitle = found.title;
-        if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
-        ecriteCols.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (écrite)` });
-        oraleCols.push({ subjectKey, domaine: found.domain || '', titre: `${displayTitle} (orale)` });
-      });
-      columns.push(...ecriteCols, ...oraleCols);
-    } else {
-      entries.forEach(found => {
-        let displayTitle = found.title;
-        if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
-        columns.push({ subjectKey, domaine: found.domain || '', titre: displayTitle });
-      });
-    }
+  const seenCols = new Set();
+  const pushCol = col => { const k = col.subjectKey + '||' + col.titre; if (!seenCols.has(k)){ seenCols.add(k); columns.push(col); } };
+  ['Dictée', 'Graphie'].forEach(subjectKey => {
+    getEvaluationsForDate(subjectKey, dateStr).forEach(found => {
+      let displayTitle = found.title;
+      if (/^\d{4}-\d{2}-\d{2}/.test(displayTitle)) displayTitle = displayTitle.replace(' 00:00:00','');
+      pushCol({ subjectKey, domaine: found.domain || '', titre: displayTitle, label: displayTitle });
+    });
   });
+  getFrMathsEvaluationsForDate(dateStr).forEach(pushCol);
 
   if (columns.length === 0){
     const note = document.createElement('div');
@@ -2953,7 +3031,8 @@ function renderEvaluations(dateStr){
   headRow.appendChild(cornerTh);
   columns.forEach(col => {
     const th = document.createElement('th');
-    th.textContent = `${col.subjectKey} — ${col.titre}`;
+    th.textContent = `${col.subjectKey} — ${col.label || col.titre}`;
+    th.title = col.titre;
     headRow.appendChild(th);
   });
   thead.appendChild(headRow);
@@ -2999,7 +3078,6 @@ function renderEvaluations(dateStr){
     columns.forEach(col => {
       const td = document.createElement('td');
       const score = getScore(col, name);
-      if (score >= 1) td.classList.add('eval-cell-validated');
       const wrap = document.createElement('div');
       wrap.className = 'missions-cell-chips';
 
@@ -3013,8 +3091,8 @@ function renderEvaluations(dateStr){
 
       const valSpan = document.createElement('span');
       valSpan.textContent = score;
-      valSpan.style.minWidth = '18px';
-      valSpan.style.display = 'inline-block';
+      const stc = counterStyle(score);
+      valSpan.style.cssText = `min-width:28px;height:24px;line-height:24px;display:inline-block;text-align:center;border-radius:6px;font-weight:700;border:1px solid var(--line);background:${stc.bg};color:${stc.fg};`;
 
       const plus = document.createElement('button');
       plus.className = 'missions-mini-chip';
@@ -3723,6 +3801,14 @@ function livretColumns(subjectKey){
   const clean = t => /^\d{4}-\d{2}-\d{2}/.test(t) ? t.replace(' 00:00:00', '') : t;
   const mode = LIVRET_DOTS_SUBJECTS.has(subjectKey) ? 'dots' : 'count';
   const mk = (r, over) => Object.assign({ subjectKey, domaine: r.domain || '', label: clean(r.title), tag: '', titre: clean(r.title), mode }, over || {});
+  if (subjectKey === 'Lecture' && frMathsSounds().length > 0){
+    // Lecture - fichier : uniquement la liste des sons de la progression Français-Maths
+    const cols = frMathsSounds().map(x => ({ subjectKey, domaine: 'Lecture', label: x.sound, tag: '', titre: `${x.sound} (écrite)`, mode: 'count', group: 'fichier', srcSheet: 'Français-Maths', srcRow: x.row }));
+    for (let p = 1; p <= 5; p++){
+      cols.push({ subjectKey, domaine: 'Lecture orale', label: `Période ${p}`, tag: '', titre: `Lecture orale — Période ${p}`, mode: 'count', noPiste: true, group: 'orale' });
+    }
+    return cols;
+  }
   if (subjectKey === 'Lecture'){
     const sons = rows.filter(r => r.rowNum && r.rowNum > LECTURE_SONS_APRES_LIGNE);
     const autres = rows.filter(r => !(r.rowNum && r.rowNum > LECTURE_SONS_APRES_LIGNE));
@@ -3872,11 +3958,12 @@ function computeBilanClasse(){
     const sheet = SUBJECT_DATA[subj];
     if (!sheet) return;
     livretColumns(subj).forEach(col => {
-      const row = sheet.rows.find(r => (/^\d{4}-\d{2}-\d{2}/.test(r.title) ? r.title.replace(' 00:00:00','') : r.title) === col.label);
+      const srcSheet = col.srcSheet ? SUBJECT_DATA[col.srcSheet] : sheet;
+      const row = col.srcRow || sheet.rows.find(r => (/^\d{4}-\d{2}-\d{2}/.test(r.title) ? r.title.replace(' 00:00:00','') : r.title) === col.label);
       const dates = new Set();
-      if (row){
+      if (row && srcSheet){
         Object.entries(row.cells).forEach(([c, cell]) => {
-          const d = sheet.date_cols[c];
+          const d = srcSheet.date_cols[c];
           if (cell && cell.c === 'FFFFA500' && d && d <= todayStr) dates.add(d);
         });
       }
@@ -3924,8 +4011,86 @@ const BILAN_STATUS = [
   { key: 'recul', label: 'Recul insuffisant', color: '#A8AEB5' }
 ];
 
+let bilanDrill = null; // { group, domaine, status|null }
+function renderBilanDrill(container, list){
+  const goStudent = name => { const sel = document.getElementById('suiviStudent'); sel.value = name; bilanDrill = null; renderSuivi(); window.scrollTo(0, 0); };
+  const items = list.filter(c => (BILAN_GROUPE[c.discipline] || c.discipline) === bilanDrill.group && (c.domaine || c.discipline) === bilanDrill.domaine);
+  const back = document.createElement('button');
+  back.textContent = '← Retour au bilan de la classe';
+  back.style.cssText = 'font-family:-apple-system,sans-serif;font-size:0.8rem;border:1px solid var(--ink);background:white;border-radius:9px;padding:6px 12px;cursor:pointer;margin:6px 0 10px;';
+  back.addEventListener('click', () => { bilanDrill = null; renderSuivi(); });
+  container.appendChild(back);
+  const h = document.createElement('div'); h.className = 'bilan-head';
+  h.innerHTML = `<strong>${escHtml(bilanDrill.domaine)} <span style="font-weight:400;color:var(--ink-soft)">· ${escHtml(bilanDrill.group)} · ${items.length} comp.</span></strong>`;
+  container.appendChild(h);
+
+  // filtres de statut
+  const chips = document.createElement('div'); chips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;font-family:-apple-system,sans-serif;font-size:0.78rem;';
+  const mkChip = (label, status, color) => {
+    const n = status ? items.filter(c => c.status === status).length : items.length;
+    const b = document.createElement('button');
+    const on = bilanDrill.status === status;
+    b.style.cssText = `border:1.5px solid ${color || 'var(--ink)'};background:${on ? (color || '#2b2b2b') : 'white'};color:${on ? '#fff' : 'var(--ink)'};border-radius:999px;padding:5px 12px;cursor:pointer;`;
+    b.textContent = `${label} (${n})`;
+    b.addEventListener('click', () => { bilanDrill.status = status; renderSuivi(); });
+    chips.appendChild(b);
+  };
+  mkChip('Tout', null, null);
+  BILAN_STATUS.forEach(st => mkChip(st.label, st.key, st.color));
+  container.appendChild(chips);
+
+  const shown = bilanDrill.status ? items.filter(c => c.status === bilanDrill.status) : items;
+  if (shown.length === 0){
+    const n = document.createElement('div'); n.className = 'empty-note'; n.textContent = 'Aucune compétence dans cette catégorie.'; container.appendChild(n); return;
+  }
+
+  // élèves concernés : sous le seuil sur ces compétences
+  const perStudent = STUDENTS.map(n => ({ n, below: shown.filter(c => c.totals[n] < BILAN_SEUIL) })).filter(x => x.below.length > 0)
+    .sort((a, b) => b.below.length - a.below.length || a.n.localeCompare(b.n));
+  const box = document.createElement('div'); box.className = 'bilan-box';
+  const stLabel = bilanDrill.status ? BILAN_STATUS.find(s => s.key === bilanDrill.status).label : 'toutes catégories';
+  box.innerHTML = `<h3>Élèves à suivre <small>${perStudent.length}</small></h3><div class="sub">Élèves encore sous ${BILAN_SEUIL}+ sur au moins une compétence (${escHtml(stLabel)}). Touche un prénom pour ouvrir son suivi.</div>`;
+  const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+  perStudent.forEach(x => {
+    const c = document.createElement('span');
+    c.className = 'auto-chip bilan-name'; c.style.textDecoration = 'none';
+    c.textContent = `${x.n} · ${x.below.length}/${shown.length}`;
+    c.title = x.below.map(k => k.label).join(', ');
+    c.addEventListener('click', () => goStudent(x.n));
+    wrap.appendChild(c);
+  });
+  if (perStudent.length === 0) wrap.textContent = 'Toute la classe a atteint le seuil.';
+  box.appendChild(wrap);
+  container.appendChild(box);
+
+  // détail par compétence, groupé par statut
+  BILAN_STATUS.forEach(st => {
+    const group = shown.filter(c => c.status === st.key);
+    if (group.length === 0) return;
+    const b2 = document.createElement('div'); b2.className = 'bilan-box';
+    b2.innerHTML = `<h3><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${st.color};margin-right:6px"></i>${st.label} <small>${group.length}</small></h3>`;
+    group.sort((a, b) => a.pct - b.pct).forEach(c => {
+      const it = document.createElement('div'); it.className = 'bilan-item';
+      const pc = Math.round(c.pct * 100);
+      it.innerHTML = `<div class="l1"><span>${escHtml(c.label)}</span><span>${pc} %</span></div><div class="l2">${c.nDates} date(s) d'évaluation passée(s) · ${c.mastered.length}/${STUDENTS.length} à ${BILAN_SEUIL}+</div>`;
+      const below = STUDENTS.filter(n => c.totals[n] < BILAN_SEUIL);
+      const line = document.createElement('div'); line.style.cssText = 'line-height:1.7;font-size:0.78rem;margin-top:3px;';
+      line.appendChild(document.createTextNode(below.length ? `Sous ${BILAN_SEUIL}+ : ` : 'Toute la classe est à ' + BILAN_SEUIL + '+.'));
+      below.forEach((n, i) => {
+        const a = document.createElement('span'); a.className = 'bilan-name'; a.textContent = n; a.addEventListener('click', () => goStudent(n));
+        line.appendChild(a);
+        line.appendChild(document.createTextNode(` (${c.totals[n]})` + (i < below.length - 1 ? ', ' : '')));
+      });
+      it.appendChild(line);
+      b2.appendChild(it);
+    });
+    container.appendChild(b2);
+  });
+}
+
 function renderBilanClasse(container){
   const list = computeBilanClasse();
+  if (bilanDrill){ renderBilanDrill(container, list); return; }
   const head = document.createElement('div');
   head.className = 'bilan-head';
   head.innerHTML = `<strong>Classe entière · ${STUDENTS.length} élèves</strong><small>Les tendances décrivent les validations (${BILAN_SEUIL}+), sans mesurer les échecs.</small>`;
@@ -3949,10 +4114,16 @@ function renderBilanClasse(container){
     const grid = document.createElement('div'); grid.className = 'bilan-tiles';
     Object.keys(groups[g]).sort().forEach(d => {
       const items = groups[g][d];
-      const tile = document.createElement('div'); tile.className = 'bilan-tile';
+      const tile = document.createElement('div'); tile.className = 'bilan-tile'; tile.style.cursor = 'pointer';
+      tile.title = 'Voir le détail (élèves à suivre, compétences)';
       const counts = {}; BILAN_STATUS.forEach(s => counts[s.key] = items.filter(c => c.status === s.key).length);
-      tile.innerHTML = `<h4>${escHtml(d)}<span>${items.length} comp.</span></h4><div class="bilan-st">` +
-        BILAN_STATUS.map(s => `<div><i style="background:${s.color}"></i>${counts[s.key]} ${s.label}</div>`).join('') + '</div>';
+      tile.innerHTML = `<h4>${escHtml(d)}<span>${items.length} comp. ›</span></h4><div class="bilan-st">` +
+        BILAN_STATUS.map(s => `<div data-st="${s.key}" style="cursor:pointer"><i style="background:${s.color}"></i>${counts[s.key]} ${s.label}</div>`).join('') + '</div>';
+      tile.addEventListener('click', e => {
+        const stEl = e.target.closest('[data-st]');
+        bilanDrill = { group: g, domaine: d, status: stEl ? stEl.dataset.st : null };
+        renderSuivi(); window.scrollTo(0, 0);
+      });
       grid.appendChild(tile);
     });
     container.appendChild(grid);
@@ -4040,6 +4211,7 @@ function renderSuivi(){
   container.innerHTML = '';
 
   const filtersBar = document.getElementById('suiviFilters');
+  if (student !== CLASSE_ENTIERE) bilanDrill = null;
   if (student === CLASSE_ENTIERE){
     filtersBar.style.display = 'none';
     renderBilanClasse(container);
@@ -4103,11 +4275,6 @@ function renderSuivi(){
     }
 
     // ---- Observations (+ ajout direct) ----
-    const obsBlock = document.createElement('div');
-    obsBlock.className = 'discipline-group';
-    const h3 = document.createElement('h3');
-    h3.textContent = 'Observations';
-    obsBlock.appendChild(h3);
     const inner = document.createElement('div');
     inner.className = 'domaine-block';
 
@@ -4136,8 +4303,7 @@ function renderSuivi(){
       line.textContent = `${o.date} — ${o.texte}`;
       inner.appendChild(line);
     });
-    obsBlock.appendChild(inner);
-    container.appendChild(obsBlock);
+    container.appendChild(makeSuiviFold('obs', 'Observations', `${obsStore.length} observation${obsStore.length > 1 ? 's' : ''}`, inner));
   }
 
   container.appendChild(buildLivretSection(student, disciplineFilter, domaineFilter));
@@ -4655,6 +4821,13 @@ function cloneSlots(slots){
 
 const AUTRE_VALUE = '__AUTRE__';
 
+// Matières proposées d'habitude dans la liste déroulante de l'emploi du temps (+ la valeur déjà choisie du créneau)
+const MATIERES_HABITUELLES = ['Accueil', 'Français-Maths', 'Graphie', 'Dictée', 'Calcul mental', 'Maths', 'Lecture', 'Oral', 'Anglais', 'HGScEmcEvar', 'Art', 'Ed° musicale', 'EDL', 'EPS', 'Culture chrétienne', 'Récréation', 'Autonomie'];
+function matieresPour(current){
+  const list = MATIERES_HABITUELLES.slice();
+  if (current && !list.includes(current)) list.push(current);
+  return list;
+}
 function getAllMatieres(){
   const set = new Set();
   Object.values(EDT_TEMPLATE).forEach(day => day.forEach(s => { if (s.matiere) set.add(s.matiere); }));
@@ -4835,7 +5008,7 @@ function buildEdtCard(wd, slot, idx, matiereOptions, modaliteOptions, onDelete){
     onDelete();
   });
 
-  const matiereWrap = buildSelectWithAutre(matiereOptions, slot.matiere, 'edt-matiere', 'Matière', (val) => {
+  const matiereWrap = buildSelectWithAutre(matieresPour(slot.matiere), slot.matiere, 'edt-matiere', 'Matière', (val) => {
     updateSlotField(wd, idx, 'matiere', val);
   });
 
