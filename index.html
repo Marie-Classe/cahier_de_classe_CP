@@ -378,6 +378,21 @@
   .bilan-two{ display:grid; grid-template-columns:2fr 1fr; gap:12px; }
   @media (max-width:700px){ .bilan-two{ grid-template-columns:1fr; } }
   .bilan-name{ cursor:pointer; text-decoration:underline; }
+  .hist{ display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin:6px 0; }
+  .hist div{ background:#f1f1f1; border-radius:8px; text-align:center; padding:6px 2px; font-size:0.7rem; color:var(--ink-soft); }
+  .hist b{ display:block; font-size:0.95rem; color:var(--ink); }
+  .acq-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin:6px 0 10px; }
+  .acq-card{ border:1px solid var(--line); border-radius:10px; background:white; padding:8px 10px; font-family:-apple-system,sans-serif; font-size:0.74rem; min-height:68px; display:flex; flex-direction:column; justify-content:space-between; gap:6px; }
+  .acq-card.ok{ background:#eef7ef; border-color:#b7dcbc; }
+  .acq-seg{ display:grid; grid-template-columns:repeat(5,1fr); gap:3px; }
+  .acq-seg i{ height:5px; border-radius:3px; background:#e2e2e2; display:block; }
+  .acq-dom{ font-family:-apple-system,sans-serif; font-weight:700; font-size:0.82rem; margin-top:10px; }
+  .acq-sum{ font-family:-apple-system,sans-serif; font-size:0.74rem; color:var(--ink-soft); margin:2px 0 4px; }
+  .board{ display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; font-family:-apple-system,sans-serif; font-size:0.74rem; }
+  @media (max-width:700px){ .board{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .board h5{ margin:0 0 4px; font-size:0.82rem; display:flex; align-items:center; gap:6px; }
+  .board h5 i{ width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .board .it{ padding:4px 0; border-top:1px solid var(--line); line-height:1.25; }
   .livret-grid{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; align-items:stretch; }
   .suivi-fold{ border:1px solid var(--line); border-radius:12px; background:white; margin:10px 0; }
   .suivi-fold > summary{ cursor:pointer; padding:11px 14px; font-family:-apple-system,sans-serif; font-weight:700; font-size:0.95rem; list-style:none; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
@@ -1279,7 +1294,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-11 10h30 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-12 19h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -4224,17 +4239,16 @@ function renderBilanClasse(container){
     const it = document.createElement('div'); it.className = 'bilan-item';
     const pc = Math.round(c.pct * 100);
     it.innerHTML = `<div class="l1"><span>${escHtml(c.label)}</span><span>${pc} %</span></div>
-      <div class="l2">${escHtml(c.discipline)} · À surveiller · ${c.nDates} date(s) d'évaluation passée(s) · ${c.mastered.length}/${STUDENTS.length} à ${BILAN_SEUIL}+</div>
+      <div class="l2">${escHtml(c.discipline)} · ${escHtml(BILAN_STATUS.find(x => x.key === c.status).label)} · ${c.nDates} date(s) d'évaluation passée(s) · ${c.mastered.length}/${STUDENTS.length} à ${BILAN_SEUIL}+</div>
       <div class="bilan-bar"><div style="width:${pc}%"></div><b></b></div>`;
     const det = document.createElement('details');
     const sm = document.createElement('summary'); sm.style.cursor = 'pointer';
     const below = STUDENTS.filter(n => c.totals[n] < BILAN_SEUIL);
     sm.textContent = `Répartition des validations et élèves sous ${BILAN_SEUIL}+ (${below.length})`;
     det.appendChild(sm);
-    const dist = document.createElement('div'); dist.className = 'l2'; dist.style.margin = '4px 0';
-    const buckets = [0,1,2,3,4].map(v => `${v} : ${STUDENTS.filter(n => c.totals[n] === v).length}`);
-    buckets.push(`${BILAN_SEUIL}+ : ${c.mastered.length}`);
-    dist.textContent = buckets.join('  ·  ');
+    const dist = document.createElement('div'); dist.className = 'hist';
+    [0,1,2,3,4].forEach(v => { const d = document.createElement('div'); d.innerHTML = `<b>${STUDENTS.filter(n => c.totals[n] === v).length}</b>à ${v}`; dist.appendChild(d); });
+    { const d = document.createElement('div'); d.innerHTML = `<b>${c.mastered.length}</b>à ${BILAN_SEUIL}+`; dist.appendChild(d); }
     det.appendChild(dist);
     const names = document.createElement('div'); names.style.lineHeight = '1.6';
     below.forEach((n, i) => { names.appendChild(nameLink(n)); const t = document.createElement('span'); t.textContent = ` (${c.totals[n]})` + (i < below.length - 1 ? ', ' : ''); names.appendChild(t); });
@@ -4285,7 +4299,81 @@ function renderBilanClasse(container){
     it.appendChild(l2); boxC.appendChild(it);
   });
   container.appendChild(boxC);
+
+  // --- Toutes les compétences abordées (détail déroulant) ---
+  const allDet = document.createElement('details'); allDet.className = 'bilan-box'; allDet.open = true;
+  const allSum = document.createElement('summary'); allSum.style.cssText = 'cursor:pointer;font-weight:700;font-size:0.95rem;';
+  allSum.textContent = `Toutes les compétences abordées (${list.length})`;
+  allDet.appendChild(allSum);
+  list.slice().sort((a, b) => a.pct - b.pct || a.label.localeCompare(b.label)).forEach(c => allDet.appendChild(mkWatch(c)));
+  container.appendChild(allDet);
 }
+
+// ---------- Fiche élève : acquis par sous-domaine + répartition par niveau ----------
+function buildStudentAcquis(student){
+  const list = computeBilanClasse();
+  const wrap = document.createElement('div');
+  if (list.length === 0){ const n = document.createElement('div'); n.className = 'empty-note'; n.textContent = "Pas encore d'évaluation passée."; wrap.appendChild(n); return { el: wrap, mastered: 0, total: 0 }; }
+  const stat = c => { const t = c.totals[student] || 0; return t >= BILAN_SEUIL ? 'ok' : (t > 0 ? 'cours' : 'none'); };
+  const nOk = list.filter(c => stat(c) === 'ok').length, nCours = list.filter(c => stat(c) === 'cours').length, nNone = list.length - nOk - nCours;
+  const sum = document.createElement('div'); sum.className = 'acq-sum';
+  sum.textContent = `● ${nOk} maîtrisée(s) · ● ${nCours} en construction (1 à ${BILAN_SEUIL - 1}) · ? ${nNone} sans donnée — « sans donnée » ne veut pas dire « non maîtrisé ».`;
+  wrap.appendChild(sum);
+  const groups = {};
+  list.forEach(c => { const g = BILAN_GROUPE[c.discipline] || c.discipline; const d = c.domaine || c.discipline; ((groups[g] = groups[g] || {})[d] = groups[g][d] || []).push(c); });
+  Object.keys(groups).sort().forEach(g => {
+    const gt = document.createElement('div'); gt.className = 'bilan-matiere'; gt.textContent = g; wrap.appendChild(gt);
+    Object.keys(groups[g]).sort().forEach(d => {
+      const items = groups[g][d];
+      const ok = items.filter(c => stat(c) === 'ok').length;
+      const dt = document.createElement('div'); dt.className = 'acq-dom'; dt.textContent = `${d} · ${ok}/${items.length}`; wrap.appendChild(dt);
+      const grid = document.createElement('div'); grid.className = 'acq-grid';
+      items.forEach(c => {
+        const t = c.totals[student] || 0, st = counterStyle(t);
+        const card = document.createElement('div'); card.className = 'acq-card' + (t >= BILAN_SEUIL ? ' ok' : '');
+        card.title = `${c.label} : ${t}`;
+        const lab = document.createElement('div'); lab.textContent = c.label; card.appendChild(lab);
+        const foot = document.createElement('div');
+        const seg = document.createElement('div'); seg.className = 'acq-seg';
+        for (let k = 1; k <= 5; k++){ const i = document.createElement('i'); if (t >= k) i.style.background = st.bg === '#fff' ? '#e2e2e2' : st.bg; seg.appendChild(i); }
+        const val = document.createElement('div'); val.style.cssText = 'margin-top:3px;color:var(--ink-soft);font-size:0.68rem;';
+        val.textContent = t === 0 ? '? sans donnée' : (t >= BILAN_SEUIL ? `✓ ${t}` : `${t} / ${BILAN_SEUIL}`);
+        foot.appendChild(seg); foot.appendChild(val); card.appendChild(foot);
+        grid.appendChild(card);
+      });
+      wrap.appendChild(grid);
+    });
+  });
+  // tableau 0 → 5+ : où en est-il, d'un coup d'œil
+  const bt = document.createElement('div'); bt.className = 'bilan-matiere'; bt.textContent = 'Répartition par niveau'; wrap.appendChild(bt);
+  const board = document.createElement('div'); board.className = 'board';
+  const cols = [0,1,2,3,4,5].map(v => ({ v, items: list.filter(c => { const t = c.totals[student] || 0; return v === 5 ? t >= 5 : t === v; }) }));
+  cols.forEach(col => {
+    const box = document.createElement('div');
+    const st = counterStyle(col.v === 0 ? 0 : col.v);
+    box.innerHTML = `<h5><i style="background:${col.v === 0 ? '#bbb' : st.bg}"></i>${col.v === 5 ? '5+' : col.v} <span style="font-weight:400;color:var(--ink-soft)">(${col.items.length})</span></h5>`;
+    col.items.forEach(c => { const it = document.createElement('div'); it.className = 'it'; it.textContent = c.label; box.appendChild(it); });
+    board.appendChild(box);
+  });
+  wrap.appendChild(board);
+  return { el: wrap, mastered: nOk, total: list.length };
+}
+
+// En-têtes de tableaux figés pendant le défilement de la page (Évals, Missions, listes)
+function updateStickyHeads(){
+  document.querySelectorAll('.scroll-table-box').forEach(box => {
+    const ths = box.querySelectorAll('thead th, tr:first-child > th');
+    if (!ths.length) return;
+    const tbl = box.querySelector('table'); if (!tbl) return;
+    const r = tbl.getBoundingClientRect();
+    const headH = ths[0].getBoundingClientRect().height || 30;
+    let off = Math.max(0, -r.top);
+    off = Math.min(off, Math.max(0, r.height - headH * 2));
+    ths.forEach(t => { t.style.transform = off > 0 ? `translateY(${off}px)` : ''; });
+  });
+}
+window.addEventListener('scroll', updateStickyHeads, { passive: true });
+window.addEventListener('resize', updateStickyHeads);
 
 function renderSuivi(){
   const sel = document.getElementById('suiviStudent');
@@ -4319,6 +4407,8 @@ function renderSuivi(){
     const rdvBlock = buildRdvSection(student);
     const rdvH3 = rdvBlock.querySelector('h3'); if (rdvH3) rdvH3.remove();
     const rdvCount = loadRdvStore().filter(r => r.eleve === student).length;
+    { const acq = buildStudentAcquis(student);
+      container.appendChild(makeSuiviFold('acquis', '🎯 Acquis par sous-domaine', acq.total ? `${acq.mastered}/${acq.total} maîtrisées` : 'aucune évaluation', acq.el)); }
     container.appendChild(makeSuiviFold('rdv', '📅 Rendez-vous parents', rdvCount ? `${rdvCount} rendez-vous` : 'aucun', rdvBlock));
 
     // ---- Missions (lecture seule ici ; modifiable dans l'onglet Missions) ----
