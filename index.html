@@ -1294,7 +1294,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-12 19h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-12 22h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -3917,6 +3917,22 @@ function livretColumns(subjectKey){
       cols.push({ subjectKey, domaine: 'Lecture orale', label: `Période ${p}`, tag: '', titre: `Lecture orale — Période ${p}`, mode: 'count', noPiste: true, group: 'orale' });
     }
     return cols;
+  }
+  // Graphie, Maths, Calcul mental, Problèmes, EDL : les rubriques viennent de la progression Français-Maths
+  // (même rubrique et même titre que les évaluations du jour, donc mêmes totaux partout)
+  if (['Graphie', 'Maths', 'Calcul mental', 'Problèmes', 'EDL'].includes(subjectKey)){
+    const fm = SUBJECT_DATA['Français-Maths'];
+    if (fm){
+      const seen = new Set(), cols = [];
+      fm.rows.forEach(r => {
+        if (!r.title || frMathsDisciplineFor(r) !== subjectKey) return;
+        if (!Object.values(r.cells || {}).some(c => c && c.c && COLOR_MAP[c.c])) return;
+        const t = clean(r.title);
+        if (seen.has(t)) return; seen.add(t);
+        cols.push(mk(r, { srcSheet: 'Français-Maths', srcRow: r }));
+      });
+      if (cols.length) return cols;
+    }
   }
   return rows.map(r => mk(r));
 }
