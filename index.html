@@ -378,6 +378,25 @@
   .bilan-two{ display:grid; grid-template-columns:2fr 1fr; gap:12px; }
   @media (max-width:700px){ .bilan-two{ grid-template-columns:1fr; } }
   .bilan-name{ cursor:pointer; text-decoration:underline; }
+  .tl-ov{ position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.4); overflow:auto; padding:14px; }
+  .tl-card{ background:#fff; border-radius:14px; max-width:1150px; margin:0 auto; padding:16px 18px 18px; font-family:-apple-system,sans-serif; }
+  .tl-top{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+  .tl-top h2{ margin:0; font-size:1.05rem; }
+  .tl-close{ border:1px solid var(--line); background:#fff; border-radius:8px; font-size:1rem; padding:4px 10px; cursor:pointer; }
+  .tl-leg{ display:flex; flex-wrap:wrap; gap:12px; margin:10px 0; font-size:0.78rem; align-items:center; }
+  .tl-chip{ display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:24px; border-radius:7px; color:#fff; font-weight:700; font-size:0.72rem; padding:0 4px; box-sizing:border-box; }
+  .tl-scroll{ overflow-x:auto; }
+  .tl-inner{ position:relative; min-width:980px; padding-left:34px; }
+  .tl-row{ position:relative; border-top:1px solid #ececec; }
+  .tl-row .tl-lab{ position:absolute; left:-34px; top:6px; font-size:0.72rem; color:var(--ink-soft); width:30px; }
+  .tl-row .tl-chip{ position:absolute; cursor:pointer; }
+  .tl-months{ position:relative; height:20px; font-size:0.72rem; color:var(--ink-soft); }
+  .tl-months span{ position:absolute; }
+  .tl-today{ position:absolute; top:20px; bottom:20px; border-left:2px dashed #e07b2f; z-index:3; pointer-events:none; }
+  .tl-today b{ position:absolute; bottom:-18px; left:4px; font-size:0.7rem; font-weight:500; white-space:nowrap; color:var(--ink); }
+  .tl-detail{ margin-top:26px; font-size:0.8rem; border-top:1px solid #ececec; padding-top:8px; line-height:1.6; }
+  .tl-click{ cursor:pointer; }
+  .tl-click:hover{ text-decoration:underline; }
   .hist{ display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin:6px 0; }
   .hist div{ background:#f1f1f1; border-radius:8px; text-align:center; padding:6px 2px; font-size:0.7rem; color:var(--ink-soft); }
   .hist b{ display:block; font-size:0.95rem; color:var(--ink); }
@@ -1294,7 +1313,7 @@
 <header>
   <h1>Cahier de classe — CP</h1>
   <p>Cahier journal · Devoirs · Évaluations · Suivi · Autonomie · Observations</p>
-  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-12 22h00 UTC</p>
+  <p id="buildVersion" style="font-size:0.68rem; color:var(--ink-soft); margin-top:4px; font-family:-apple-system,sans-serif;">Version app : 2026-11-14 10h00 UTC</p>
 </header>
 
 <nav class="tabs">
@@ -3324,7 +3343,8 @@ function renderEvalDomaine(){
   columns.forEach(col => {
     const th = document.createElement('th');
     th.textContent = col.label;
-    th.title = col.titre;
+    th.title = col.titre + ' — toucher pour voir les séances de l\'année';
+    makeTitleClickable(th, col.subjectKey, col.titre, col.label, null);
     headRow.appendChild(th);
   });
   thead.appendChild(headRow);
@@ -3956,7 +3976,7 @@ function buildLivretCountCell(col, student, rerender){
   cell.className = 'livret-cell';
   cell.style.width = '102px';
   cell.title = `${col.subjectKey} — ${col.titre} : ${total}`;
-  const t = document.createElement('div'); t.className = 't'; t.textContent = col.label; cell.appendChild(t);
+  const t = document.createElement('div'); t.className = 't'; t.textContent = col.label; makeTitleClickable(t, col.subjectKey, col.titre, col.label, student); cell.appendChild(t);
   if (col.tag){ const tg = document.createElement('div'); tg.className = 'livret-tag'; tg.textContent = col.tag; cell.appendChild(tg); }
   const row = document.createElement('div'); row.className = 'livret-count';
   const minus = document.createElement('button'); minus.textContent = '−';
@@ -3977,7 +3997,7 @@ function buildLivretCell(col, student, rerender){
   cell.className = 'livret-cell' + (total >= LIVRET_DOTS ? ' ok' : '');
   cell.title = `${col.subjectKey} — ${col.titre} : ${total}`;
   const t = document.createElement('div');
-  t.className = 't'; t.textContent = col.label;
+  t.className = 't'; t.textContent = col.label; makeTitleClickable(t, col.subjectKey, col.titre, col.label, student);
   cell.appendChild(t);
   if (col.tag){
     const tg = document.createElement('div'); tg.className = 'livret-tag'; tg.textContent = col.tag; cell.appendChild(tg);
@@ -4057,6 +4077,187 @@ function buildLivretSection(student, disciplineFilter, domaineFilter){
   return wrap;
 }
 const livretOpen = new Set();
+
+// ---------- Chronologie d'une notion : séances de l'année (Leçon, Modelage…) + validations des élèves ----------
+const TL_MODS = [
+  { name: 'Leçon', abbr: 'Le', label: 'Leçon', bg: '#2F62E8' },
+  { name: 'Modelage', abbr: 'Mo', label: 'Modelage', bg: '#E5D5B1', fg: '#333' },
+  { name: 'Entraînement', abbr: 'En', label: 'Entraînement', bg: '#9C27B0' },
+  { name: 'Évaluation', abbr: 'Év', label: 'Évaluation', bg: '#C2491D' },
+  { name: 'Mission', abbr: 'TC', label: 'Tâche complexe', bg: '#B3261E' }
+];
+function findCompetenceRow(discipline, titre){
+  const clean = t => /^\d{4}-\d{2}-\d{2}/.test(t) ? t.replace(' 00:00:00', '') : t;
+  const col = livretColumns(discipline).find(c => c.titre === titre);
+  let row = null, sheetKey = discipline;
+  if (col){
+    if (col.srcRow){ row = col.srcRow; sheetKey = col.srcSheet || discipline; }
+    else { const sh = SUBJECT_DATA[discipline]; row = sh ? sh.rows.find(r => clean(r.title) === col.label) : null; }
+  }
+  if (!row){
+    const bare = String(titre).replace(/ \(écrite\)$/, '');
+    ['Français-Maths', discipline].some(k => {
+      const sh = SUBJECT_DATA[k]; if (!sh) return false;
+      const r = sh.rows.find(r => clean(r.title) === bare || splitSounds(r.title).includes(bare));
+      if (r){ row = r; sheetKey = k; return true; } return false;
+    });
+  }
+  return { row, sheet: SUBJECT_DATA[sheetKey] || null };
+}
+function makeTitleClickable(el, discipline, titre, label, student){
+  el.classList.add('tl-click');
+  el.addEventListener('click', e => { e.stopPropagation(); openCompetenceTimeline(discipline, titre, label, student); });
+}
+function openCompetenceTimeline(discipline, titre, label, student){
+  const old = document.getElementById('tlOverlay'); if (old) old.remove();
+  const { row, sheet } = findCompetenceRow(discipline, titre);
+  const today = fmtDate(new Date());
+  const ty = parseInt(today.slice(0, 4), 10), tm = parseInt(today.slice(5, 7), 10);
+  const y0 = tm >= 8 ? ty : ty - 1;
+  const start = new Date(`${y0}-09-01T00:00:00`), end = new Date(`${y0 + 1}-07-04T00:00:00`);
+  const span = end - start;
+  const pct = d => Math.min(97, Math.max(0, (new Date(d + 'T00:00:00') - start) / span * 100));
+  const inRange = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= `${y0}-08-15` && d <= `${y0 + 1}-07-31`;
+  const fr = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+
+  // séances issues du Google Sheet
+  const sessions = {}; TL_MODS.forEach(m => sessions[m.name] = []);
+  if (row && sheet){
+    Object.entries(row.cells || {}).forEach(([c, cell]) => {
+      const d = sheet.date_cols[c];
+      if (!cell || !cell.c || !COLOR_MAP[cell.c] || !d || !inRange(d)) return;
+      const mod = COLOR_MAP[cell.c].name;
+      if (sessions[mod]) sessions[mod].push({ date: d, v: cell.v || '', link: (typeof resolveCellLink === 'function' ? resolveCellLink(row, cell, mod) : cell.l) || null });
+    });
+  }
+  // validations des élèves
+  let recs = loadEvalStore().filter(r => r.discipline === discipline && r.titre === titre && (parseInt(r.score, 10) || 0) !== 0);
+  if (student) recs = recs.filter(r => r.eleve === student);
+  const byDate = {};
+  recs.forEach(r => { if (inRange(r.date)) (byDate[r.date] = byDate[r.date] || []).push({ n: r.eleve, v: parseInt(r.score, 10) || 0 }); });
+
+  const ov = document.createElement('div'); ov.className = 'tl-ov'; ov.id = 'tlOverlay';
+  const card = document.createElement('div'); card.className = 'tl-card';
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  card.innerHTML = `<div class="tl-top"><div><h2>${escHtml(label || titre)}</h2><div style="font-size:0.74rem;color:var(--ink-soft)">${escHtml(discipline)}${student ? ' · ' + escHtml(student) : ' · toute la classe'} · ${fr(`${y0}-09-01`)}/${y0} → 04/07/${y0 + 1}</div></div><button class="tl-close">✕</button></div>`;
+  card.querySelector('.tl-close').addEventListener('click', close);
+  const leg = document.createElement('div'); leg.className = 'tl-leg';
+  TL_MODS.forEach(m => { leg.innerHTML += `<span><span class="tl-chip" style="background:${m.bg};color:${m.fg || '#fff'}">${m.abbr}</span> ${m.label}</span>`; });
+  leg.innerHTML += `<span><span class="tl-chip" style="background:#2E7D32">3</span> validations d'élèves (nombre d'élèves ${student ? '/ points' : 'ayant validé ce jour'})</span>`;
+  card.appendChild(leg);
+
+  const scroll = document.createElement('div'); scroll.className = 'tl-scroll';
+  const inner = document.createElement('div'); inner.className = 'tl-inner';
+  const months = document.createElement('div'); months.className = 'tl-months';
+  const MN = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  for (let k = 0; k < 11; k++){
+    const d = new Date(y0, 8 + k, 1);
+    const sp = document.createElement('span'); sp.style.left = ((d - start) / span * 100) + '%'; sp.textContent = MN[d.getMonth()]; months.appendChild(sp);
+  }
+  inner.appendChild(months);
+  const detail = document.createElement('div'); detail.className = 'tl-detail'; detail.textContent = 'Touche une séance ou une validation pour voir le détail.';
+  const addRow = (lab, items, mk) => {
+    const r = document.createElement('div'); r.className = 'tl-row';
+    const l = document.createElement('div'); l.className = 'tl-lab'; l.textContent = lab; r.appendChild(l);
+    const lanes = [];
+    items.sort((a, b) => a.date.localeCompare(b.date)).forEach(it => {
+      const left = pct(it.date);
+      let lane = lanes.findIndex(x => left - x >= 2.9);
+      if (lane < 0){ lane = lanes.length; lanes.push(left); } else lanes[lane] = left;
+      const chip = mk(it); chip.style.left = left + '%'; chip.style.top = (6 + lane * 30) + 'px';
+      r.appendChild(chip);
+    });
+    r.style.height = (12 + Math.max(1, lanes.length) * 30) + 'px';
+    inner.appendChild(r);
+  };
+  TL_MODS.forEach(m => addRow(m.abbr, sessions[m.name], it => {
+    const c = document.createElement('div'); c.className = 'tl-chip'; c.style.background = m.bg; c.style.color = m.fg || '#fff'; c.textContent = m.abbr;
+    c.title = `${m.label} · ${fr(it.date)}${it.v ? ' · ' + it.v : ''}`;
+    c.addEventListener('click', () => {
+      detail.innerHTML = `<b>${m.label}</b> · ${dayLabelFr(it.date)}${it.v ? ' · ' + escHtml(it.v) : ''}` + (it.link ? ` · <a href="${escHtml(it.link)}" target="_blank">🔗 ouvrir</a>` : '');
+    });
+    return c;
+  }));
+  const valItems = Object.keys(byDate).map(d => ({ date: d, list: byDate[d] }));
+  addRow('✓', valItems, it => {
+    const total = student ? it.list.reduce((a, x) => a + x.v, 0) : it.list.length;
+    const c = document.createElement('div'); c.className = 'tl-chip'; c.style.background = '#2E7D32'; c.textContent = (student && total > 0 ? '+' : '') + total;
+    c.title = `${fr(it.date)} : ${it.list.map(x => x.n + ' ' + (x.v > 0 ? '+' : '') + x.v).join(', ')}`;
+    c.addEventListener('click', () => {
+      detail.innerHTML = `<b>Validations · ${dayLabelFr(it.date)}</b><br>` + it.list.map(x => `${escHtml(x.n)} (${x.v > 0 ? '+' : ''}${x.v})`).join(', ');
+    });
+    return c;
+  });
+  if (today >= `${y0}-09-01` && today <= `${y0 + 1}-07-04`){
+    const tl = document.createElement('div'); tl.className = 'tl-today'; tl.style.left = `calc(34px + (100% - 34px) * ${pct(today) / 100})`;
+    tl.innerHTML = `<b>Aujourd'hui · ${fr(today)}</b>`; inner.appendChild(tl);
+  }
+  scroll.appendChild(inner); card.appendChild(scroll); card.appendChild(detail);
+
+  // ---- La maîtrise au fil des semaines : cumul des élèves ayant atteint 5 validations ----
+  {
+    const all = loadEvalStore().filter(r => r.discipline === discipline && r.titre === titre);
+    const mondayOf = d => { const x = new Date(d + 'T00:00:00'); const wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); return x; };
+    const iso = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    const weeks = [];
+    for (let m = mondayOf(`${y0}-09-01`); iso(m) <= today && weeks.length < 60; m.setDate(m.getDate() + 7)){
+      const wEnd = new Date(m); wEnd.setDate(wEnd.getDate() + 6);
+      const endStr = iso(wEnd) > today ? today : iso(wEnd);
+      const tot = {};
+      all.forEach(r => { if (r.date <= endStr) tot[r.eleve] = (tot[r.eleve] || 0) + (parseInt(r.score, 10) || 0); });
+      const val = student ? Math.max(0, tot[student] || 0) : STUDENTS.filter(n => (tot[n] || 0) >= BILAN_SEUIL).length;
+      weeks.push({ label: iso(m), val });
+    }
+    const maxV = student ? Math.max(BILAN_SEUIL, ...weeks.map(w => w.val)) : STUDENTS.length;
+    const last = weeks.length ? weeks[weeks.length - 1].val : 0;
+    const sec = document.createElement('div'); sec.style.cssText = 'margin-top:14px;border-top:1px solid #ececec;padding-top:10px;';
+    sec.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><b style="font-size:0.95rem">La maîtrise au fil des semaines</b><div style="font-size:0.72rem;color:var(--ink-soft)">${student ? `Total de validations de ${escHtml(student)}` : `Nombre cumulé d'élèves ayant atteint ${BILAN_SEUIL} validations`}</div></div><div style="font-size:1.2rem;font-weight:700;color:#12a58a">${last} <span style="font-size:0.75rem;font-weight:400;color:var(--ink-soft)">/ ${student ? BILAN_SEUIL + '+' : STUDENTS.length + ' élèves'}</span></div></div>`;
+    const chart = document.createElement('div'); chart.style.cssText = 'display:flex;align-items:flex-end;gap:2px;height:110px;margin-top:8px;border-bottom:1px solid #12a58a;position:relative;overflow-x:auto;';
+    weeks.forEach(w => {
+      const bar = document.createElement('div');
+      bar.style.cssText = `flex:1 0 12px;min-width:12px;background:#4fcfb8;border-radius:2px 2px 0 0;height:${w.val === 0 ? 2 : Math.max(3, w.val / maxV * 100)}%;`;
+      bar.title = `Semaine du ${fr(w.label)} : ${w.val}`;
+      chart.appendChild(bar);
+    });
+    sec.appendChild(chart);
+    const axis = document.createElement('div'); axis.style.cssText = 'display:flex;gap:2px;font-size:0.65rem;color:var(--ink-soft);overflow:hidden;';
+    weeks.forEach((w, i) => { const l = document.createElement('div'); l.style.cssText = 'flex:1 0 12px;min-width:12px;white-space:nowrap;'; l.textContent = i % 3 === 0 ? fr(w.label) : ''; axis.appendChild(l); });
+    sec.appendChild(axis);
+    const note = document.createElement('div'); note.style.cssText = 'font-size:0.68rem;color:var(--ink-soft);margin-top:4px;'; note.textContent = "Chaque barre donne le total atteint en fin de semaine ; la semaine en cours s'arrête à aujourd'hui.";
+    sec.appendChild(note);
+    card.appendChild(sec);
+  }
+
+  // ---- Ressources (liens du Sheet) ----
+  {
+    const res = document.createElement('div'); res.style.cssText = 'margin-top:14px;border-top:1px solid #ececec;padding-top:10px;font-size:0.8rem;';
+    const links = [];
+    if (row && row.link) links.push({ t: 'Lien du titre dans la progression', d: null, u: row.link });
+    TL_MODS.forEach(m => sessions[m.name].forEach(x => { if (x.link) links.push({ t: m.label + (x.v ? ' ' + x.v : ''), d: x.date, u: x.link }); }));
+    const seen = new Set(), uniq = links.filter(l => { const k = l.u + '|' + l.d; if (seen.has(k)) return false; seen.add(k); return true; });
+    res.innerHTML = `<b style="font-size:0.95rem">Ressources de la compétence</b><div style="font-size:0.72rem;color:var(--ink-soft);margin-bottom:6px">Liens associés à cette ligne du Google Sheet, par séance.</div>`;
+    if (uniq.length === 0){ const n = document.createElement('div'); n.className = 'empty-note'; n.textContent = 'Aucune ressource associée à cette compétence.'; res.appendChild(n); }
+    uniq.sort((a, b) => (a.d || '').localeCompare(b.d || '')).forEach(l => {
+      const line = document.createElement('div'); line.style.cssText = 'padding:3px 0;border-top:1px solid #f1f1f1;';
+      line.innerHTML = `${l.d ? fr(l.d) + ' · ' : ''}${escHtml(l.t)} — <a href="${escHtml(l.u)}" target="_blank">🔗 ouvrir</a>`;
+      res.appendChild(line);
+    });
+    card.appendChild(res);
+  }
+  if (!row && valItems.length === 0){ const n = document.createElement('div'); n.className = 'empty-note'; n.textContent = "Cette notion n'a pas de ligne dans la progression et aucune validation n'est enregistrée."; card.appendChild(n); }
+  // récapitulatif des élèves (classe) : cumul actuel
+  if (!student){
+    const tot = {}; loadEvalStore().filter(r => r.discipline === discipline && r.titre === titre).forEach(r => { tot[r.eleve] = (tot[r.eleve] || 0) + (parseInt(r.score, 10) || 0); });
+    const ok = STUDENTS.filter(n => (tot[n] || 0) >= BILAN_SEUIL).length;
+    const rec = document.createElement('div'); rec.className = 'acq-sum'; rec.style.marginTop = '8px';
+    rec.textContent = `Aujourd'hui : ${ok}/${STUDENTS.length} élèves à ${BILAN_SEUIL}+.`;
+    card.appendChild(rec);
+  }
+  ov.appendChild(card); document.body.appendChild(ov);
+}
 
 // ---------- Bilan de la classe entière ----------
 const BILAN_SEUIL = 5;        // 5 et plus = compétence validée
@@ -4187,6 +4388,7 @@ function renderBilanDrill(container, list){
       const it = document.createElement('div'); it.className = 'bilan-item';
       const pc = Math.round(c.pct * 100);
       it.innerHTML = `<div class="l1"><span>${escHtml(c.label)}</span><span>${pc} %</span></div><div class="l2">${c.nDates} date(s) d'évaluation passée(s) · ${c.mastered.length}/${STUDENTS.length} à ${BILAN_SEUIL}+</div>`;
+      makeTitleClickable(it.querySelector('.l1 span'), c.discipline, c.titre, c.label, null);
       const below = STUDENTS.filter(n => c.totals[n] < BILAN_SEUIL);
       const line = document.createElement('div'); line.style.cssText = 'line-height:1.7;font-size:0.78rem;margin-top:3px;';
       line.appendChild(document.createTextNode(below.length ? `Sous ${BILAN_SEUIL}+ : ` : 'Toute la classe est à ' + BILAN_SEUIL + '+.'));
@@ -4257,6 +4459,7 @@ function renderBilanClasse(container){
     it.innerHTML = `<div class="l1"><span>${escHtml(c.label)}</span><span>${pc} %</span></div>
       <div class="l2">${escHtml(c.discipline)} · ${escHtml(BILAN_STATUS.find(x => x.key === c.status).label)} · ${c.nDates} date(s) d'évaluation passée(s) · ${c.mastered.length}/${STUDENTS.length} à ${BILAN_SEUIL}+</div>
       <div class="bilan-bar"><div style="width:${pc}%"></div><b></b></div>`;
+    makeTitleClickable(it.querySelector('.l1 span'), c.discipline, c.titre, c.label, null);
     const det = document.createElement('details');
     const sm = document.createElement('summary'); sm.style.cursor = 'pointer';
     const below = STUDENTS.filter(n => c.totals[n] < BILAN_SEUIL);
@@ -4348,7 +4551,7 @@ function buildStudentAcquis(student){
         const t = c.totals[student] || 0, st = counterStyle(t);
         const card = document.createElement('div'); card.className = 'acq-card' + (t >= BILAN_SEUIL ? ' ok' : '');
         card.title = `${c.label} : ${t}`;
-        const lab = document.createElement('div'); lab.textContent = c.label; card.appendChild(lab);
+        const lab = document.createElement('div'); lab.textContent = c.label; makeTitleClickable(lab, c.discipline, c.titre, c.label, student); card.appendChild(lab);
         const foot = document.createElement('div');
         const seg = document.createElement('div'); seg.className = 'acq-seg';
         for (let k = 1; k <= 5; k++){ const i = document.createElement('i'); if (t >= k) i.style.background = st.bg === '#fff' ? '#e2e2e2' : st.bg; seg.appendChild(i); }
